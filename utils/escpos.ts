@@ -14,9 +14,11 @@ const cleanText = (text: string): string => {
   return text
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '') // Elimina acentos
-    .replace(/\u00d1/g, 'N') // Ñ -> N
-    .replace(/\u00f1/g, 'n') // ñ -> n
-    .toUpperCase(); // Forzar mayúsculas para mejor legibilidad en tickets
+    .replace(/\u00d1/g, 'N')
+    .replace(/\u00f1/g, 'N')
+    .toUpperCase()
+    .replace(/[^\x20-\x7E\n]/g, '') // Mantiene solo ASCII imprimible y \n para evitar que bytes extra confundan a la impresora
+    .trim();
 };
 
 // Helper to format text lines for the printer
@@ -40,7 +42,8 @@ export const generateReceiptCommands = (cart: CartItem[], customer: CustomerDeta
 
   // Initialize
   commands += '\x1B\x40'; // Initialize printer
-  commands += '\x1B\x74\x02'; // Select Code Page CP850 (Multilingual)
+  // Quitamos la selección de página de códigos específica para evitar incompatibilidad en modelos básicos
+  // commands += '\x1B\x74\x02'; 
 
   // Header
   commands += '\x1B\x61\x31'; // Center align
@@ -110,9 +113,9 @@ export const generateReceiptCommands = (cart: CartItem[], customer: CustomerDeta
   commands += '\n\x1B\x61\x31';
   commands += 'GRACIAS POR SU COMPRA!\n';
 
-  // AVANCE DE PAPEL
-  commands += '\n\n\n\n\n\n';
-  commands += '\x1D\x56\x41\x03'; // Command: Partial Cut
+  // AVANCE DE PAPEL Y CORTE
+  commands += '\n\n\n\n\n';
+  commands += '\x1D\x56\x01'; // Comando estándar de corte parcial / avance completo en la mayoría de las térmicas
 
   return commands;
 };
@@ -150,7 +153,7 @@ export const generateEscPosCommands = (table: Table, settings: PrintSettings, wa
   const divider = '-'.repeat(paperWidth) + '\n';
   let commands = '';
   commands += '\x1B\x40';
-  commands += '\x1B\x74\x02';
+  // commands += '\x1B\x74\x02';
   commands += '\x1B\x61\x31';
   commands += '\x1B\x21\x08';
   commands += `${printType === 'COPIA' ? '--- COPIA ---' : cleanText(settings.businessName)}\n`;
@@ -182,7 +185,7 @@ export const generateEscPosCommands = (table: Table, settings: PrintSettings, wa
   if (table.observations?.trim()) {
     commands += divider + 'NOTAS:\n' + cleanText(table.observations.trim()) + '\n';
   }
-  commands += '\n\n\n\n\n\n\x1D\x56\x41\x03';
+  commands += '\n\n\n\n\n\x1D\x56\x01';
   return commands;
 };
 
@@ -191,7 +194,7 @@ export const generateKitchenOrderCommands = (table: Table, settings: PrintSettin
   const divider = '-'.repeat(paperWidth) + '\n';
   let commands = '';
   commands += '\x1B\x40';
-  commands += '\x1B\x74\x02';
+  // commands += '\x1B\x74\x02';
   commands += '\x1B\x61\x31';
   commands += '\x1B\x21\x30';
   commands += `${cleanText(actionType)}\n`;
@@ -220,6 +223,6 @@ export const generateKitchenOrderCommands = (table: Table, settings: PrintSettin
   if ((actionType === 'Pedido Nuevo' || actionType === 'Adicional') && table.observations?.trim()) {
     commands += divider + 'OBS:\n' + cleanText(table.observations.trim()) + '\n';
   }
-  commands += '\n\n\n\n\n\n\x1D\x56\x41\x03';
+  commands += '\n\n\n\n\n\x1D\x56\x01';
   return commands;
 };

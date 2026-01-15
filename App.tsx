@@ -116,11 +116,11 @@ function App() {
   }, [theme]);
 
   const sendDataToPrinter = async (characteristic: any, data: Uint8Array) => {
-    const CHUNK_SIZE = 256;
+    const CHUNK_SIZE = 64; // Reducido para mayor compatibilidad con impresoras Bluetooth 58mm
     for (let i = 0; i < data.length; i += CHUNK_SIZE) {
       const chunk = data.slice(i, i + CHUNK_SIZE);
       await characteristic.writeValue(chunk);
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise(resolve => setTimeout(resolve, 80)); // Aumentado ligeramente para evitar saturar el buffer
     }
   };
 
@@ -557,6 +557,14 @@ function App() {
       )}
       {pendingRemoveItemId && (
         <AdminAuthModal adminPin={settings.adminPin || '0000'} onClose={() => setPendingRemoveItemId(null)} onSuccess={executeRemoveItem} title="Eliminar Producto del Pedido" />
+      )}
+      {showInstallModal && (
+        <InstallPromptModal
+          isOpen={showInstallModal}
+          onClose={() => setShowInstallModal(false)}
+          onInstall={triggerNativeInstall}
+          platform={platform}
+        />
       )}
     </>
   );
