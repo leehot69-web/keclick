@@ -108,7 +108,21 @@ const CartScreen: React.FC<CartScreenProps> = (props) => {
                                         {isOriginal && <span className="bg-amber-500 text-white text-[8px] font-black px-1 py-0.5 rounded-full uppercase tracking-tighter">Servido</span>}
                                     </div>
                                     {item.selectedModifiers.length > 0 && (
-                                        <p className="text-[10px] text-gray-400 mt-1 leading-tight">{item.selectedModifiers.map(m => m.option.name).join(', ')}</p>
+                                        <div className="mt-1 space-y-0.5">
+                                            {(() => {
+                                                const groups: Record<string, string[]> = {};
+                                                item.selectedModifiers.forEach(m => {
+                                                    if (!groups[m.groupTitle]) groups[m.groupTitle] = [];
+                                                    groups[m.groupTitle].push(m.option.name);
+                                                });
+                                                return Object.entries(groups).map(([groupTitle, options]) => (
+                                                    <p key={groupTitle} className="text-[10px] text-gray-500 leading-tight">
+                                                        <span className="font-bold uppercase text-[8px] text-gray-400 mr-1">{groupTitle}:</span>
+                                                        {options.join(', ')}
+                                                    </p>
+                                                ));
+                                            })()}
+                                        </div>
                                     )}
                                 </div>
                                 <div className="text-right">

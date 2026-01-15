@@ -2,7 +2,7 @@
 import { Table, AppSettings, OrderItem, CartItem, CustomerDetails, SelectedModifier } from '../types';
 
 interface PrintSettings extends AppSettings {
-    businessName: string;
+  businessName: string;
 }
 
 /**
@@ -41,13 +41,13 @@ export const generateReceiptCommands = (cart: CartItem[], customer: CustomerDeta
   // Initialize
   commands += '\x1B\x40'; // Initialize printer
   commands += '\x1B\x74\x02'; // Select Code Page CP850 (Multilingual)
-  
+
   // Header
   commands += '\x1B\x61\x31'; // Center align
   commands += '\x1B\x21\x30'; // Double height, double width
   commands += `${cleanText(settings.businessName)}\n`;
   commands += '\x1B\x21\x00'; // Normal size
-  commands += `RECIBO DE PEDIDO\n`; 
+  commands += `RECIBO DE PEDIDO\n`;
   commands += '\x1B\x61\x30'; // Left align
 
   // Order Details
@@ -67,43 +67,51 @@ export const generateReceiptCommands = (cart: CartItem[], customer: CustomerDeta
   cart.forEach(item => {
     const modTotal = item.selectedModifiers.reduce((s, m) => s + m.option.price, 0);
     const itemTotal = (item.price + modTotal) * item.quantity;
-    
+
     commands += `\x1B\x21\x08`; // Bold
     commands += formatLine(`${item.quantity}X ${item.name}`, `$${itemTotal.toFixed(2)}`, paperWidth);
     commands += '\x1B\x21\x00'; // Normal
-    
+
     if (item.selectedModifiers.length > 0) {
-      item.selectedModifiers.forEach(mod => {
-        let modText = ` + ${mod.option.name}`;
-        if(mod.option.price > 0) modText += ` ($${mod.option.price.toFixed(2)})`;
-        commands += cleanText(modText).substring(0, paperWidth) + '\n';
+      // Agrupar modificadores por grupo
+      const groups: Record<string, string[]> = {};
+      item.selectedModifiers.forEach(m => {
+        if (!groups[m.groupTitle]) groups[m.groupTitle] = [];
+        groups[m.groupTitle].push(m.option.name);
+      });
+
+      Object.entries(groups).forEach(([groupTitle, options]) => {
+        const groupText = `  ${groupTitle}:`;
+        commands += cleanText(groupText).substring(0, paperWidth) + '\n';
+        const optionsText = `    ${options.join(', ')}`;
+        commands += cleanText(optionsText).substring(0, paperWidth) + '\n';
       });
     }
   });
 
   commands += divider;
-  
+
   // Totals
   commands += '\x1B\x61\x32'; // Right align
   commands += '\x1B\x21\x30'; // Large text
   commands += `TOTAL: $${cartTotal.toFixed(2)}\n`;
   commands += '\x1B\x21\x00'; // Reset
-  
+
   commands += '\x1B\x61\x30'; // Left align
   commands += formatLine('METODO:', customer.paymentMethod, paperWidth);
-  
+
   // Footer
   if (customer.instructions) {
     commands += divider;
     commands += 'NOTAS:\n';
     commands += `${cleanText(customer.instructions)}\n`;
   }
-  
-  commands += '\n\x1B\x61\x31'; 
+
+  commands += '\n\x1B\x61\x31';
   commands += 'GRACIAS POR SU COMPRA!\n';
 
   // AVANCE DE PAPEL
-  commands += '\n\n\n\n\n\n'; 
+  commands += '\n\n\n\n\n\n';
   commands += '\x1D\x56\x41\x03'; // Command: Partial Cut
 
   return commands;
@@ -114,25 +122,25 @@ export const generateTestPrintCommands = (settings: PrintSettings): string => {
   const divider = '-'.repeat(paperWidth) + '\n';
   let commands = '';
 
-  commands += '\x1B\x40'; 
-  commands += '\x1B\x74\x02'; 
-  commands += '\x1B\x61\x31'; 
-  commands += '\x1B\x21\x30'; 
+  commands += '\x1B\x40';
+  commands += '\x1B\x74\x02';
+  commands += '\x1B\x61\x31';
+  commands += '\x1B\x21\x30';
   commands += `${cleanText(settings.businessName)}\n`;
-  commands += '\x1B\x21\x00'; 
+  commands += '\x1B\x21\x00';
   commands += divider;
   commands += 'PRUEBA DE IMPRESION OK\n';
   commands += divider;
-  commands += '\x1B\x61\x30'; 
+  commands += '\x1B\x61\x30';
   commands += `ANCHO: ${paperWidth} CARACTERES\n`;
   commands += 'ESTA ES UNA PRUEBA DE TEXTO\n';
   commands += 'LIMPIO DE ACENTOS Y ENES.\n\n';
-  commands += '\x1B\x61\x31'; 
+  commands += '\x1B\x61\x31';
   commands += 'FECHA: ' + new Date().toLocaleDateString() + '\n';
   commands += 'HORA: ' + new Date().toLocaleTimeString() + '\n';
-  
+
   commands += '\n\n\n\n\n\n';
-  commands += '\x1D\x56\x41\x03'; 
+  commands += '\x1D\x56\x41\x03';
 
   return commands;
 };
@@ -144,13 +152,13 @@ export const generateEscPosCommands = (table: Table, settings: PrintSettings, wa
   commands += '\x1B\x40';
   commands += '\x1B\x74\x02';
   commands += '\x1B\x61\x31';
-  commands += '\x1B\x21\x08'; 
+  commands += '\x1B\x21\x08';
   commands += `${printType === 'COPIA' ? '--- COPIA ---' : cleanText(settings.businessName)}\n`;
   commands += '\x1B\x21\x00';
   commands += `COMANDA DE COCINA\n\n`;
   commands += '\x1B\x61\x30';
   const orderIdentifier = table.orderType === 'para llevar' ? `PEDIDO #${table.number}` : `MESA: ${table.number}`;
-  commands += formatLine(orderIdentifier, new Date().toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'}), paperWidth);
+  commands += formatLine(orderIdentifier, new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }), paperWidth);
   commands += `MESONERO: ${cleanText(waiterName)}\n`;
   if (table.customerName) commands += `CLIENTE: ${cleanText(table.customerName)}\n`;
   commands += divider;
@@ -159,7 +167,16 @@ export const generateEscPosCommands = (table: Table, settings: PrintSettings, wa
     commands += `${item.quantity}X ${cleanText(item.name)}\n`;
     commands += '\x1B\x21\x00';
     if (item.selectedModifiers.length > 0) {
-      item.selectedModifiers.forEach(mod => { commands += `  + ${cleanText(mod.name)}\n`; });
+      const groups: Record<string, string[]> = {};
+      item.selectedModifiers.forEach(m => {
+        if (!groups[m.groupTitle]) groups[m.groupTitle] = [];
+        groups[m.groupTitle].push(m.option.name);
+      });
+
+      Object.entries(groups).forEach(([groupTitle, options]) => {
+        commands += `  ${cleanText(groupTitle)}:\n`;
+        commands += `    ${cleanText(options.join(', '))}\n`;
+      });
     }
   });
   if (table.observations?.trim()) {
@@ -182,13 +199,22 @@ export const generateKitchenOrderCommands = (table: Table, settings: PrintSettin
   commands += `${cleanText(settings.businessName)}\n`;
   commands += '\x1B\x61\x30';
   const orderIdentifier = table.orderType === 'para llevar' ? `PEDIDO #${table.number}` : `MESA: ${table.number}`;
-  commands += formatLine(orderIdentifier, new Date().toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'}), paperWidth);
+  commands += formatLine(orderIdentifier, new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }), paperWidth);
   commands += `MESONERO: ${cleanText(waiterName)}\n`;
   commands += divider;
   itemsToPrint.forEach(item => {
     commands += `\x1B\x21\x08${item.quantity}X ${cleanText(item.name)}\n\x1B\x21\x00`;
     if (item.selectedModifiers.length > 0) {
-      item.selectedModifiers.forEach(mod => { commands += `  + ${cleanText(mod.name)}\n`; });
+      const groups: Record<string, string[]> = {};
+      item.selectedModifiers.forEach(m => {
+        if (!groups[m.groupTitle]) groups[m.groupTitle] = [];
+        groups[m.groupTitle].push(m.option.name);
+      });
+
+      Object.entries(groups).forEach(([groupTitle, options]) => {
+        commands += `  ${cleanText(groupTitle)}:\n`;
+        commands += `    ${cleanText(options.join(', '))}\n`;
+      });
     }
   });
   if ((actionType === 'Pedido Nuevo' || actionType === 'Adicional') && table.observations?.trim()) {

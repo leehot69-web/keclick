@@ -1,8 +1,42 @@
 
-import { MenuCategory, ModifierGroup } from './types';
+import { MenuCategory, ModifierGroup, PizzaIngredient } from './types';
 
 export const DELIVERY_PROMO_DAYS = [1, 2, 3, 4];
 export const TOGO_ORDER_START_NUMBER = 101;
+
+// ============= PRECIOS BASE DE PIZZA =============
+export const PIZZA_BASE_PRICES = {
+  'Pequeña': 5,
+  'Mediana': 10,
+  'Familiar': 11
+};
+
+// ============= INGREDIENTES DE PIZZA =============
+export const PIZZA_INGREDIENTS: PizzaIngredient[] = [
+  // Categoría A - Ingredientes Premium
+  { name: 'Jamón', category: 'A', prices: { Pequeña: 1, Mediana: 3, Familiar: 3 } },
+  { name: 'Pepperoni', category: 'A', prices: { Pequeña: 1, Mediana: 3, Familiar: 3 } },
+  { name: 'Maíz', category: 'A', prices: { Pequeña: 1, Mediana: 3, Familiar: 3 } },
+  { name: 'Queso Amarillo', category: 'A', prices: { Pequeña: 1, Mediana: 3, Familiar: 3 } },
+  { name: 'Champiñones', category: 'A', prices: { Pequeña: 1, Mediana: 3, Familiar: 3 } },
+  { name: 'Aceitunas Negras', category: 'A', prices: { Pequeña: 1, Mediana: 3, Familiar: 3 } },
+
+  // Categoría B - Ingredientes Básicos
+  { name: 'Cebolla', category: 'B', prices: { Pequeña: 0.5, Mediana: 1, Familiar: 1 } },
+  { name: 'Pimentón', category: 'B', prices: { Pequeña: 0.5, Mediana: 1, Familiar: 1 } },
+  { name: 'Tomates', category: 'B', prices: { Pequeña: 0.5, Mediana: 1, Familiar: 1 } },
+
+  // Categoría C - Ingredientes Especiales
+  { name: 'Tocineta', category: 'C', prices: { Pequeña: 2, Mediana: 4, Familiar: 4 } },
+];
+
+// Ingredientes por defecto de pizzas especiales
+export const SPECIAL_PIZZA_INGREDIENTS: Record<string, string[]> = {
+  'Pizza Margarita': ['Maíz', 'Cebolla', 'Pimentón', 'Aceitunas Negras', 'Champiñones'],
+  'Pizza Caprichosa': ['Jamón', 'Tocineta', 'Pepperoni', 'Queso Amarillo'],
+  'Pizza 4 Quesos': [], // Solo quesos del base
+  'Pizza Bianca': ['Tocineta', 'Champiñones'], // + pollo al grill (en descripción)
+};
 
 // --- GRUPOS DE MODIFICADORES ---
 export const MARGARITA_MODIFIERS: ModifierGroup[] = [
@@ -10,121 +44,255 @@ export const MARGARITA_MODIFIERS: ModifierGroup[] = [
     title: "Elige tu Proteína",
     selectionType: "single", minSelection: 1, maxSelection: 1,
     options: [
-      { name: "Carne en Vara", price: 0 },
-      { name: "Puerco", price: 0 },
-      { name: "Mixto", price: 0 }
+      { name: "Pollo", price: 0 },
+      { name: "Carne", price: 0 },
+      { name: "Cerdo", price: 0 },
+      { name: "Crispy", price: 0 }
     ],
   },
   {
     title: "Personaliza (Opcional)",
     selectionType: "multiple", minSelection: 0, maxSelection: 10,
     options: [
-      { name: "Sin Ensalada", price: 0 },
-      { name: "Sin Queso", price: 0 },
-      { name: "Sin Nata", price: 0 },
-      { name: "Sin Chimichurri", price: 0 },
-      { name: "Sin Tostones", price: 0 },
-      { name: "Sin Arepa", price: 0 }
+      { name: "Sin Lechuga", price: 0 },
+      { name: "Sin Tomate", price: 0 },
+      { name: "Sin Mayonesa", price: 0 },
+      { name: "Sin Salsa Roja", price: 0 },
+      { name: "Sin Mostaza", price: 0 },
+      { name: "Extra Queso", price: 1 },
+    ],
+  },
+  {
+    title: "Tamaño de Pizza",
+    selectionType: "single", minSelection: 1, maxSelection: 1,
+    options: [
+      { name: "Pequeña", price: 5 },
+      { name: "Mediana", price: 10 },
+      { name: "Familiar", price: 11 }
+    ],
+  },
+  {
+    title: "Sabor de Pizza (Individual)",
+    selectionType: "single", minSelection: 1, maxSelection: 1,
+    options: [
+      { name: "Jamón", price: 0 },
+      { name: "Pepperoni", price: 0 },
+      { name: "Maíz", price: 0 },
+      { name: "Queso Amarillo", price: 0 },
+      { name: "Champiñones", price: 0 },
+      { name: "Aceitunas", price: 0 }
+    ],
+  },
+  {
+    title: "Sabor de Pizza (Familiar)",
+    selectionType: "single", minSelection: 1, maxSelection: 1,
+    options: [
+      { name: "Jamón", price: 0 },
+      { name: "Pepperoni", price: 0 },
+      { name: "Maíz", price: 0 },
+      { name: "Queso Amarillo", price: 0 },
+      { name: "Champiñones", price: 0 },
+      { name: "Aceitunas", price: 0 }
+    ],
+  },
+  {
+    title: "Sabor Pizza 2 (Familiar)",
+    selectionType: "single", minSelection: 1, maxSelection: 1,
+    options: [
+      { name: "Jamón", price: 0 },
+      { name: "Pepperoni", price: 0 },
+      { name: "Maíz", price: 0 },
+      { name: "Queso Amarillo", price: 0 },
+      { name: "Champiñones", price: 0 },
+      { name: "Aceitunas", price: 0 }
     ],
   }
 ];
 
-// --- DATOS DEL MENÚ (MI RANCHITO MAR Y LEÑA) ---
+// --- DATOS DEL MENÚ MARGARITA (PIZZERÍA) ---
 export const MARGARITA_MENU_DATA: MenuCategory[] = [
   {
-    title: 'ENTRADA',
+    title: 'ENTRADAS',
     items: [
-      { name: 'Coctel de camarones', price: 9, available: true, description: 'Galletas, camarones en salsa rosada y especias' },
-      { name: 'Ceviche', price: 9, available: true, description: 'Galletas, dado de pescado, camarón o mixto marinados en limón' },
-      { name: 'Aguacate rellenos de camarones', price: 9, available: true, description: 'Galletas, salsa rosada y queso' }
+      { name: 'Tequeños (8 Mini)', price: 5, available: true, description: '8 mini tequeños + salsa tártara' },
+      { name: 'Tenders de Pollo', price: 4, available: true, description: 'Servicio de tenders de pollo' },
+      { name: 'Papas Fritas', price: 3, available: true, description: 'Papas a la francesa' }
     ]
   },
   {
-    title: 'SOPA',
+    title: 'ARMA TU PIZZA',
     items: [
-      { name: 'Costilla (con arepa y queso)', price: 5, available: true },
-      { name: 'Picadillo llanero con carne y puerco en vara', price: 8, available: true }
+      {
+        name: 'Pizza Personalizada',
+        price: 5, // Precio base pequeña
+        available: true,
+        description: 'Salsa napolitana + Queso mozzarella. Masa tradicional, borde de queso. Elige tamaño e ingredientes.',
+        isPizza: true
+      }
     ]
   },
   {
-    title: 'ENSALADA',
+    title: 'PIZZAS ESPECIALES',
     items: [
-      { name: 'Aguacate', price: 5, available: true, description: 'Lechuga, tomate, cebolla, aguacate' }
+      {
+        name: 'Pizza Margarita',
+        price: 18,
+        available: true,
+        description: 'Salsa napolitana, maíz, cebolla, pimentón, aceitunas negras y champiñones',
+        isSpecialPizza: true,
+        defaultIngredients: ['Maíz', 'Cebolla', 'Pimentón', 'Aceitunas Negras', 'Champiñones']
+      },
+      {
+        name: 'Pizza Caprichosa',
+        price: 20,
+        available: true,
+        description: 'Salsa napolitana, jamón, tocineta, pepperoni, queso amarillo',
+        isSpecialPizza: true,
+        defaultIngredients: ['Jamón', 'Tocineta', 'Pepperoni', 'Queso Amarillo']
+      },
+      {
+        name: 'Pizza 4 Quesos',
+        price: 20,
+        available: true,
+        description: 'Salsa napolitana, queso mozzarella, queso parmesano, queso pecorino, queso azul',
+        isSpecialPizza: true,
+        defaultIngredients: []
+      },
+      {
+        name: 'Pizza Bianca',
+        price: 20,
+        available: true,
+        description: 'Salsa blanca (queso crema), mozzarella, tocineta, champiñones, pollo al grill',
+        isSpecialPizza: true,
+        defaultIngredients: ['Tocineta', 'Champiñones']
+      }
     ]
   },
   {
-    title: 'PLATO FUERTE',
+    title: 'COMBOS',
     items: [
-      { 
-        name: 'Cachapa con Queso de Mano', price: 12, available: true, 
-        description: 'Con 1 rueda de queso de mano, crema y puerco o carne en vara o mixta',
+      {
+        name: 'Combo 1',
+        price: 15,
+        available: true,
+        description: '1 Pizza familiar con borde de queso + 1 ingrediente + Coca Cola 1.5 lts',
+        isCombo: true,
+        comboIncludes: ['1 Pizza Familiar', '1 Ingrediente', 'Coca Cola 1.5L'],
+        modifierGroupTitles: ['Sabor de Pizza (Familiar)']
+      },
+      {
+        name: 'Combo 2',
+        price: 18,
+        available: true,
+        description: '1 Pizza familiar con borde de queso + 1 ingrediente + 8 minitequeños + salsa + Coca Cola 1.5 lts',
+        isCombo: true,
+        comboIncludes: ['1 Pizza Familiar', '1 Ingrediente', '8 Minitequeños', 'Salsa', 'Coca Cola 1.5L'],
+        modifierGroupTitles: ['Sabor de Pizza (Familiar)']
+      },
+      {
+        name: 'Combo 3',
+        price: 20,
+        available: true,
+        description: '1 Pizza familiar + 1 individual con borde de queso + 1 ingrediente c/u + Coca Cola 1.5 lts',
+        isCombo: true,
+        comboIncludes: ['1 Pizza Familiar', '1 Pizza Individual', '1 Ingrediente c/u', 'Coca Cola 1.5L'],
+        modifierGroupTitles: ['Sabor de Pizza (Familiar)', 'Sabor de Pizza (Individual)']
+      },
+      {
+        name: 'Combo 4',
+        price: 28,
+        available: true,
+        description: '2 Pizzas familiares con borde de queso + 1 ingrediente c/u + Coca Cola 1.5 lts',
+        isCombo: true,
+        comboIncludes: ['2 Pizzas Familiares', '1 Ingrediente c/u', 'Coca Cola 1.5L'],
+        modifierGroupTitles: ['Sabor de Pizza (Familiar)', 'Sabor Pizza 2 (Familiar)']
+      },
+      {
+        name: 'Combo 5 (4 Estaciones)',
+        price: 17,
+        available: true,
+        description: '1 Pizza familiar con borde de queso, 4 estaciones con los ingredientes de tu preferencia',
+        isCombo: true,
+        comboIncludes: ['1 Pizza Familiar 4 Estaciones', 'Ingredientes a elección']
+      }
+    ]
+  },
+  {
+    title: 'HAMBURGUESAS Y MÁS',
+    items: [
+      {
+        name: 'Hamburguesa Callejera',
+        price: 9,
+        available: true,
+        description: 'Pan de la casa 220gr de proteína (pollo, carne, crispy o cerdo), una rueda de queso cebú, jamón, queso amarillo, lechuga, tomate, mayonesa, salsa roja, mostaza, y papas ralladas',
         modifierGroupTitles: ["Elige tu Proteína", "Personaliza (Opcional)"]
       },
-      { 
-        name: 'Carne en vara / Puerco / Mixto (Personal)', price: 12, available: true, 
-        description: 'Tostones, arepas, ensalada, queso, chimichurri, nata',
+      {
+        name: 'Tacos / Burritos',
+        price: 9,
+        available: true,
+        description: '200gr proteína (lomo de cerdo, pollo, carne) papas ralladas, jamón, queso amarillo, una rueda de queso cebú, lechuga, repollo, tomate, mayonesa, salsa roja y mostaza',
         modifierGroupTitles: ["Elige tu Proteína", "Personaliza (Opcional)"]
       },
-      { 
-        name: 'Carne en vara / Puerco / Mixto (Familiar)', price: 45, available: true, 
-        description: 'Tostones, arepas, ensalada, queso, chimichurri, nata',
+      {
+        name: 'Patacón Callejero',
+        price: 9,
+        available: true,
+        description: '200 gr de proteína (Pollo, carne o lomo de cerdo), una rueda de queso cebú, queso amarillo y jamón ahumado, lechuga, tomate, mayonesa, salsa roja y mostaza',
         modifierGroupTitles: ["Elige tu Proteína", "Personaliza (Opcional)"]
-      },
-      { name: 'Mar y tierra (Personal)', price: 17, available: true, description: 'Puerco, carne, pollo, papas fritas, queso, aguacate, huevas fritas, croquetas y camarón rebozado' },
-      { name: 'Mar y tierra (Para dos)', price: 28, available: true, description: 'Puerco, carne, pollo, papas fritas, queso, aguacate, huevas fritas, croquetas y camarón rebozado' },
-      { name: 'Bocachico frito', price: 12, available: true, description: 'Tostones, queso, ensalada y nata' },
-      { name: 'Curvina frita (Mediana)', price: 12, available: true, description: 'Tostones, queso, ensalada y nata' },
-      { name: 'Curvina frita (Grande)', price: 15, available: true, description: 'Tostones, queso, ensalada y nata' },
-      { name: 'Lebranche (Personal)', price: 17, available: true, description: 'Tostones, queso, ensalada y nata' },
-      { name: 'Lebranche (Para 2)', price: 25, available: true, description: 'Tostones, queso, ensalada y nata' },
-      { name: 'Pescado en rueda (Personal)', price: 12, available: true, description: 'Tostones, queso, ensalada y nata' },
-      { name: 'Pescado en rueda (Para 2)', price: 22, available: true, description: 'Tostones, queso, ensalada y nata' },
-      { name: 'Filet de pescado frito', price: 12, available: true, description: 'Tostones, queso, ensalada y nata' },
-      { name: 'Filet de pescado (Camarón y queso)', price: 14, available: true, description: 'Tostones, queso, ensalada y nata' },
-      { name: 'Bocachico relleno con vegetales, camarón y queso', price: 14, available: true, description: 'Tostones, queso, ensalada y nata' },
-      { name: 'Huevas fritas', price: 12, available: true, description: 'Tostones, queso, ensalada y nata' },
-      { name: 'Camarones rebozados', price: 12, available: true, description: 'Tostones, queso, ensalada y nata' },
-      { name: 'Croquetas de pescado (250g)', price: 10, available: true, description: 'Papas fritas' },
-      { name: 'Tender de pollo (250g)', price: 8, available: true, description: 'Papas fritas' }
+      }
     ]
   },
   {
-    title: 'ADICIONALES',
+    title: 'PANES',
     items: [
-      { name: 'Tequeños (8)', price: 6, available: true },
-      { name: 'Queso (2)', price: 2, available: true },
-      { name: 'Queso frito', price: 3, available: true },
-      { name: 'Nata', price: 3, available: true },
-      { name: 'Aguacate', price: 3, available: true },
-      { name: 'Chorizo (1)', price: 2, available: true },
-      { name: 'Galletas', price: 1, available: true },
-      { name: 'Proteínas', price: 7, available: true },
-      { name: 'Tostones', price: 2, available: true },
-      { name: 'Yuca frita', price: 2, available: true },
-      { name: 'Arepa (6)', price: 2, available: true },
-      { name: 'Papa francesa (200g)', price: 3, available: true },
-      { name: 'Arroz', price: 3, available: true },
-      { name: 'Yuca cocida', price: 2, available: true }
+      { name: 'Pan Sencillo', price: 2, available: true, description: 'Pan de la casa, salchicha o huevo papas ralladas, lechuga, tomate, mayonesa, salsa roja, mostaza' },
+      { name: 'Pan Especial', price: 3, available: true, description: 'Pan de la casa, salchicha o huevo papas ralladas, media rueda de queso cebú, lechuga, tomate, mayonesa, salsa roja, mostaza' }
+    ]
+  },
+  {
+    title: 'AREPA',
+    items: [
+      {
+        name: 'Arepa Margarita',
+        price: 9,
+        available: true,
+        description: '1 Proteína (Pollo, carne, puerco) con pico de gallo, queso rallado, salsa tártara',
+        modifierGroupTitles: ["Elige tu Proteína"]
+      }
     ]
   },
   {
     title: 'POSTRES',
     items: [
+      { name: 'Torta de Chocolate', price: 8, available: true },
       { name: 'Quesillo', price: 5, available: true },
-      { name: 'Torta de chocolate', price: 8, available: true },
-      { name: 'Tres leches', price: 7, available: true }
+      { name: 'Torta Tres Leches', price: 7, available: true },
+      { name: 'Pie de Limón', price: 6, available: true },
+      { name: 'Marquesa de Pudín', price: 7, available: true }
     ]
   },
   {
     title: 'BEBIDAS',
     items: [
-      { name: 'Refresco 350ml', price: 1, available: true },
-      { name: 'Refresco 1.5 L', price: 3, available: true },
-      { name: 'Papelón con limón 350ml', price: 1, available: true },
-      { name: 'Papelón con limón 1.5 L', price: 3, available: true },
+      { name: 'Coca Cola 1.5 lts', price: 2.5, available: true },
+      { name: 'Nestea de Vaso', price: 1.5, available: true },
+      { name: 'Coca Cola 350ml', price: 1, available: true },
+      { name: 'Agua 600ml', price: 1, available: true },
       { name: 'Cerveza', price: 1.5, available: true },
-      { name: 'Balde de 10 cervezas', price: 12, available: true },
-      { name: 'Agua 600ml', price: 1, available: true }
+      { name: 'Balde de 10 Cervezas', price: 10, available: true }
+    ]
+  },
+  {
+    title: 'COCTELES',
+    items: [
+      { name: 'Margarita', price: 5, available: true },
+      { name: 'Piña Colada', price: 5, available: true },
+      { name: 'Daiquiri de Fresa', price: 5, available: true },
+      { name: 'Mojito', price: 5, available: true },
+      { name: 'Cuba Libre', price: 5, available: true },
+      { name: 'Sangría', price: 5, available: true },
+      { name: 'Vaso de Whisky', price: 6, available: true }
     ]
   }
 ];

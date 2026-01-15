@@ -21,7 +21,7 @@ const PendingPaymentsModal: React.FC<PendingPaymentsModalProps> = ({ isOpen, onC
 
   const calculateTotal = (table: Table) => {
     return table.order.reduce((acc, item) => {
-      const modifiersTotal = item.selectedModifiers.reduce((modAcc, mod) => modAcc + mod.price, 0);
+      const modifiersTotal = item.selectedModifiers.reduce((modAcc, mod) => modAcc + mod.option.price, 0);
       return acc + (item.price + modifiersTotal) * item.quantity;
     }, 0);
   };
@@ -39,16 +39,16 @@ const PendingPaymentsModal: React.FC<PendingPaymentsModalProps> = ({ isOpen, onC
       >
         <h2 className="text-2xl font-bold text-[var(--brand-color)] mb-4">Cuentas por Cobrar</h2>
         <p className="text-gray-500 mb-6">Listado de tus mesas con pagos pendientes.</p>
-        
+
         <div className="flex-grow overflow-y-auto pr-2 space-y-3">
           {pendingTables.length > 0 ? (
             pendingTables
               .sort((a, b) => (a.sentToKitchenAt ? new Date(a.sentToKitchenAt).getTime() : 0) - (b.sentToKitchenAt ? new Date(b.sentToKitchenAt).getTime() : 0))
               .map(table => {
                 const total = calculateTotal(table);
-                const sentAtTime = table.sentToKitchenAt 
-                    ? new Date(table.sentToKitchenAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) 
-                    : 'N/A';
+                const sentAtTime = table.sentToKitchenAt
+                  ? new Date(table.sentToKitchenAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+                  : 'N/A';
 
                 return (
                   <button
@@ -70,15 +70,15 @@ const PendingPaymentsModal: React.FC<PendingPaymentsModalProps> = ({ isOpen, onC
               })
           ) : (
             <div className="text-center py-10 text-gray-400">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <h3 className="mt-4 text-lg font-bold text-gray-600">¡Todo al día!</h3>
-                <p className="mt-1">No tienes cuentas pendientes por cobrar.</p>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <h3 className="mt-4 text-lg font-bold text-gray-600">¡Todo al día!</h3>
+              <p className="mt-1">No tienes cuentas pendientes por cobrar.</p>
             </div>
           )}
         </div>
-        
+
         <div className="mt-6 pt-4 border-t border-gray-200">
           <button
             onClick={onClose}

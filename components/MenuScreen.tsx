@@ -9,6 +9,7 @@ interface MenuScreenProps {
     onRemoveItem: (id: string) => void;
     cart: CartItem[];
     onOpenModifierModal: (item: MenuItem) => void;
+    onOpenPizzaBuilder?: (item: MenuItem) => void;
     onGoToCart: () => void;
     onClearCart?: () => void;
     cartItemCount?: number;
@@ -27,7 +28,7 @@ interface MenuScreenProps {
 
 const MenuScreen: React.FC<MenuScreenProps> = ({
     menu, cart, cartItemCount = 0, onAddItem, onUpdateQuantity, onRemoveItem,
-    onOpenModifierModal, onGoToCart, onClearCart,
+    onOpenModifierModal, onOpenPizzaBuilder, onGoToCart, onClearCart,
     businessName, businessLogo, triggerShake, table, waiter, onDeselectTable, onOpenBarcodeScanner,
     onInstallApp, showInstallButton, activeRate, isEditing = false
 }) => {
@@ -45,7 +46,7 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
     const isPosMode = table !== undefined && table !== null;
 
     return (
-        <div className="flex flex-col h-full bg-[#001A4B] relative overflow-hidden">
+        <div className="flex flex-col h-full bg-gradient-to-b from-[#051a12] to-[#0a3d2c] relative overflow-hidden">
             {isPosMode ? (
                 <div className="flex-shrink-0 p-4 bg-white border-b border-gray-100 flex justify-between items-center z-30">
                     <div className="max-w-7xl mx-auto w-full flex justify-between items-center">
@@ -118,7 +119,7 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
                                         <p className="text-[9px] font-medium text-gray-400">Instala para uso offline</p>
                                     </div>
                                 </div>
-                                <button onClick={onInstallApp} className="bg-[#F99D1C] text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg">Instalar</button>
+                                <button onClick={onInstallApp} className="bg-[#00D4AA] text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg">Instalar</button>
                             </div>
                         )}
                     </div>
@@ -126,15 +127,15 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
             )}
 
             {/* Categorías */}
-            <div className="shrink-0 bg-[#00143a] shadow-lg z-20">
+            <div className="shrink-0 bg-[#041510] shadow-lg z-20">
                 <div className="max-w-7xl mx-auto flex overflow-x-auto py-4 px-4 gap-3 scrollbar-hide md:justify-center">
                     {menu.map(cat => (
                         <button
                             key={cat.title}
                             onClick={() => scrollToCategory(cat.title)}
                             className={`flex-shrink-0 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeCategory === cat.title
-                                    ? 'bg-[#00AEEF] text-white shadow-[0_8px_20px_rgba(0,174,239,0.3)] scale-105'
-                                    : 'bg-white/10 text-white/60 border border-white/5'
+                                ? 'bg-[#00D4AA] text-white shadow-[0_8px_20px_rgba(0,212,170,0.3)] scale-105'
+                                : 'bg-white/10 text-white/60 border border-white/5'
                                 }`}
                         >
                             {cat.title}
@@ -148,17 +149,18 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
                 <div className="max-w-7xl mx-auto p-4 lg:p-8">
                     {menu.map(category => (
                         <div key={category.title} ref={el => { categoryRefs.current[category.title] = el; }} className="mb-12">
-                            <h2 className="text-[11px] font-black text-[#00AEEF] uppercase tracking-[0.3em] mb-6 px-1 border-l-4 border-[#F99D1C] pl-3">{category.title}</h2>
+                            <h2 className="text-[11px] font-black text-[#00D4AA] uppercase tracking-[0.3em] mb-6 px-1 border-l-4 border-[#FFD700] pl-3">{category.title}</h2>
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
                                 {category.items.filter(i => i.available).map((item) => {
                                     const hasModifiers = item.modifierGroupTitles && item.modifierGroupTitles.length > 0;
-                                    const cartItemForSimpleProduct = !hasModifiers ? cart.find(ci => ci.name === item.name && ci.selectedModifiers.length === 0) : null;
+                                    const isPizzaItem = item.isPizza || item.isSpecialPizza;
+                                    const cartItemForSimpleProduct = !hasModifiers && !isPizzaItem ? cart.find(ci => ci.name === item.name && ci.selectedModifiers.length === 0) : null;
                                     const quantityInCart = cartItemForSimpleProduct ? cartItemForSimpleProduct.quantity : 0;
 
                                     return (
-                                        <div key={item.name} className="bg-white rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.2)] flex flex-col p-4 border-t-4 border-[#F99D1C] min-h-[180px] justify-between transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_20px_45_rgba(249,157,28,0.25)] group">
+                                        <div key={item.name} className={`bg-white rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.2)] flex flex-col p-4 border-t-4 ${isPizzaItem ? 'border-[#FF6B35]' : 'border-[#FFD700]'} min-h-[180px] justify-between transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_20px_45_rgba(0,212,170,0.25)] group`}>
                                             <div className="flex-grow flex flex-col overflow-hidden mb-4">
-                                                <h3 className="text-[11px] md:text-xs font-black text-gray-900 leading-[1.2] uppercase line-clamp-2 mb-1 group-hover:text-[#F99D1C] transition-colors">{item.name}</h3>
+                                                <h3 className={`text-[11px] md:text-xs font-black text-gray-900 leading-[1.2] uppercase line-clamp-2 mb-1 ${isPizzaItem ? 'group-hover:text-[#FF6B35]' : 'group-hover:text-[#00D4AA]'} transition-colors`}>{item.name}</h3>
                                                 {item.description && (
                                                     <p className="text-[9px] text-gray-400 font-medium leading-tight line-clamp-2 italic opacity-80">
                                                         {item.description}
@@ -172,10 +174,17 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
                                                     <p className="text-[9px] font-bold text-gray-400 uppercase mt-0.5">Bs. {(item.price * activeRate).toFixed(2)}</p>
                                                 </div>
 
-                                                {hasModifiers ? (
+                                                {isPizzaItem && onOpenPizzaBuilder ? (
+                                                    <button
+                                                        onClick={() => onOpenPizzaBuilder(item)}
+                                                        className="w-full bg-gradient-to-r from-[#FF6B35] to-[#F7931E] text-white py-2 rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-md active:scale-95 transition-all hover:shadow-lg"
+                                                    >
+                                                        🍕 {item.isPizza ? 'Armar Pizza' : 'Personalizar'}
+                                                    </button>
+                                                ) : hasModifiers ? (
                                                     <button
                                                         onClick={() => onOpenModifierModal(item)}
-                                                        className="w-full bg-[#001A4B] text-white py-2 rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-md active:scale-95 transition-all hover:bg-[#F99D1C]"
+                                                        className="w-full bg-[#0a3d2c] text-white py-2 rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-md active:scale-95 transition-all hover:bg-[#00D4AA]"
                                                     >
                                                         Pedir
                                                     </button>
@@ -189,7 +198,7 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
                                                     ) : (
                                                         <button
                                                             onClick={() => onAddItem(item, [], 1)}
-                                                            className="w-full bg-[#001A4B] text-white py-2 rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-md active:scale-95 transition-all hover:bg-[#F99D1C]"
+                                                            className="w-full bg-[#0a3d2c] text-white py-2 rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-md active:scale-95 transition-all hover:bg-[#00D4AA]"
                                                         >
                                                             Agregar
                                                         </button>
@@ -209,12 +218,12 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
                 <div className="absolute bottom-6 left-0 right-0 flex justify-center px-6 z-40">
                     <button
                         onClick={onGoToCart}
-                        className={`w-full max-w-lg h-16 ${isEditing ? 'bg-green-600 border-green-700' : 'bg-[#F99D1C] border-[#D47F00]'} rounded-2xl flex items-center justify-between px-7 shadow-2xl shadow-black/40 transform transition-all active:scale-95 border-b-4 ${triggerShake ? 'shake-animation' : ''}`}
+                        className={`w-full max-w-lg h-16 ${isEditing ? 'bg-green-600 border-green-700' : 'bg-gradient-to-r from-[#00D4AA] to-[#00B894] border-[#009977]'} rounded-2xl flex items-center justify-between px-7 shadow-2xl shadow-black/40 transform transition-all active:scale-95 border-b-4 ${triggerShake ? 'shake-animation' : ''}`}
                     >
                         <div className="flex items-center gap-4">
                             <div className="relative">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                                <span className={`absolute -top-1.5 -right-2 ${isEditing ? 'bg-green-800' : 'bg-[#001A4B]'} text-white font-black w-6 h-6 rounded-full flex items-center justify-center text-[10px] shadow-lg border-2 border-white`}>{cartItemCount}</span>
+                                <span className={`absolute -top-1.5 -right-2 ${isEditing ? 'bg-green-800' : 'bg-[#051a12]'} text-white font-black w-6 h-6 rounded-full flex items-center justify-center text-[10px] shadow-lg border-2 border-white`}>{cartItemCount}</span>
                             </div>
                             <span className="text-white font-black uppercase tracking-widest text-xs">
                                 {isEditing ? 'Ir a Cobrar Cuenta' : 'Ver Mi Carrito'}

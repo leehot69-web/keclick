@@ -7,11 +7,11 @@ export interface ModifierOption {
 export interface ModifierGroup {
   title: string;
   selectionType: 'single' | 'multiple';
-  minSelection: number; 
-  maxSelection: number; 
+  minSelection: number;
+  maxSelection: number;
   options: ModifierOption[];
-  freeSelectionCount?: number; 
-  extraPrice?: number; 
+  freeSelectionCount?: number;
+  extraPrice?: number;
 }
 
 // NUEVA ESTRUCTURA PARA ASIGNACIÓN DE MODIFICADORES
@@ -26,13 +26,49 @@ export interface MenuItem {
   available: boolean;
   description?: string;
   modifierGroupTitles?: (string | ModifierAssignment)[]; // Puede ser un string o un objeto de asignación
-  image?: string; 
+  image?: string;
+  isPizza?: boolean; // Indica si es una pizza personalizable
+  isSpecialPizza?: boolean; // Indica si es una pizza especial con ingredientes predefinidos
+  defaultIngredients?: string[]; // Ingredientes por defecto para pizzas especiales
+  isCombo?: boolean; // Indica si es un combo
+  comboIncludes?: string[]; // Descripción de lo que incluye el combo
 }
 
 export interface MenuCategory {
   title: string;
   items: MenuItem[];
 }
+
+// ============= TIPOS PARA PIZZAS =============
+
+export type PizzaSize = 'Pequeña' | 'Mediana' | 'Familiar';
+
+export interface PizzaIngredient {
+  name: string;
+  category: 'A' | 'B' | 'C';
+  prices: {
+    Pequeña: number;
+    Mediana: number;
+    Familiar: number;
+  };
+}
+
+export type PizzaHalf = 'left' | 'right' | 'full';
+
+export interface PizzaIngredientSelection {
+  ingredient: PizzaIngredient;
+  half: PizzaHalf; // donde va el ingrediente
+}
+
+export interface PizzaConfiguration {
+  size: PizzaSize;
+  basePrice: number;
+  ingredients: PizzaIngredientSelection[];
+  isSpecialPizza?: boolean;
+  specialPizzaName?: string;
+}
+
+// ============= FIN TIPOS PARA PIZZAS =============
 
 export type ThemeName = 'red' | 'blue' | 'green' | 'dark' | 'white' | 'marine' | 'margarita';
 
@@ -41,10 +77,10 @@ export interface StoreProfile {
   name: string;
   logo: string;
   menu: MenuCategory[];
-  whatsappNumber: string; 
-  kitchenWhatsappNumber?: string; 
-  adminWhatsappNumber?: string; 
-  googleSheetUrl?: string; 
+  whatsappNumber: string;
+  kitchenWhatsappNumber?: string;
+  adminWhatsappNumber?: string;
+  googleSheetUrl?: string;
   modifierGroups: ModifierGroup[];
   theme: ThemeName;
   paymentMethods: string[];
@@ -52,17 +88,18 @@ export interface StoreProfile {
 }
 
 export interface SelectedModifier {
-    groupTitle: string;
-    option: ModifierOption;
+  groupTitle: string;
+  option: ModifierOption;
 }
 
 export interface CartItem {
-  id: string; 
+  id: string;
   name: string;
-  price: number; 
+  price: number;
   quantity: number;
   selectedModifiers: SelectedModifier[];
   notes?: string;
+  pizzaConfig?: PizzaConfiguration; // Configuración de pizza si aplica
 }
 
 export interface CustomerDetails {
@@ -96,8 +133,9 @@ export interface OrderItem {
   name: string;
   price: number;
   quantity: number;
-  selectedModifiers: ModifierOption[];
+  selectedModifiers: SelectedModifier[];
   status?: 'cancelled' | 'pending';
+  pizzaConfig?: PizzaConfiguration; // Configuración de pizza si aplica
 }
 
 // Added missing Table export
@@ -130,7 +168,7 @@ export interface SpecialOffer {
 
 export interface SaleRecord {
   id: string;
-  date: string; 
+  date: string;
   time: string;
   tableNumber: number;
   waiter: string;
