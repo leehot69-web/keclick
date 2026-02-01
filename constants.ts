@@ -56,10 +56,22 @@ export const MARGARITA_MODIFIERS: ModifierGroup[] = [
     options: [
       { name: "Sin Lechuga", price: 0 },
       { name: "Sin Tomate", price: 0 },
+      { name: "Sin Cebolla", price: 0 },
+      { name: "Sin Repollo", price: 0 },
       { name: "Sin Mayonesa", price: 0 },
       { name: "Sin Salsa Roja", price: 0 },
       { name: "Sin Mostaza", price: 0 },
       { name: "Extra Queso", price: 1 },
+    ],
+  },
+  {
+    title: "Proteínas para Mixto",
+    selectionType: "multiple", minSelection: 2, maxSelection: 2,
+    options: [
+      { name: "Pollo", price: 0 },
+      { name: "Carne", price: 0 },
+      { name: "Cerdo", price: 0 },
+      { name: "Crispy", price: 0 }
     ],
   },
   {
@@ -214,6 +226,44 @@ export const MARGARITA_MENU_DATA: MenuCategory[] = [
         description: '1 Pizza familiar con borde de queso, 4 estaciones con los ingredientes de tu preferencia',
         isCombo: true,
         comboIncludes: ['1 Pizza Familiar 4 Estaciones', 'Ingredientes a elección']
+      }
+    ]
+  },
+  {
+    title: 'PATACONES',
+    items: [
+      {
+        name: 'Patacón Sencillo',
+        price: 9,
+        available: true,
+        description: 'Patacón con 1 proteína a elección, queso cebú, jamón, vegetales y salsas.',
+        modifierGroupTitles: ["Elige tu Proteína", "Personaliza (Opcional)"]
+      },
+      {
+        name: 'Patacón Mixto (2 Proteínas)',
+        price: 11,
+        available: true,
+        description: 'Patacón con 2 proteínas a elección, queso cebú, jamón, vegetales y salsas.',
+        modifierGroupTitles: ["Proteínas para Mixto", "Personaliza (Opcional)"]
+      }
+    ]
+  },
+  {
+    title: 'TACOS',
+    items: [
+      {
+        name: 'Taco Sencillo',
+        price: 9,
+        available: true,
+        description: 'Taco con 1 proteína a elección, queso cebú, jamón, vegetales y salsas.',
+        modifierGroupTitles: ["Elige tu Proteína", "Personaliza (Opcional)"]
+      },
+      {
+        name: 'Taco Mixto (2 Proteínas)',
+        price: 11,
+        available: true,
+        description: 'Taco con 2 proteínas a elección, queso cebú, jamón, vegetales y salsas.',
+        modifierGroupTitles: ["Proteínas para Mixto", "Personaliza (Opcional)"]
       }
     ]
   },
