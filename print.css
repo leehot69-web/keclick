@@ -1,0 +1,31 @@
+@media print {
+    body {
+        background: white !important;
+    }
+
+    /* Escondemos TODO por defecto */
+    body>* {
+        display: none !important;
+    }
+
+    /* Mostramos SOLO el área de impresión */
+    #printable-receipt {
+        display: block !important;
+        width: 58mm;
+        margin: 0;
+        padding: 2mm;
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 10pt;
+        color: black;
+        line-height: 1.2;
+    }
+
+    /* Aseguramos que el contenedor de React no bloquee */
+    #root {
+        display: none !important;
+    }
+}
+
+#printable-receipt {
+    display: none;
+}

@@ -59,7 +59,6 @@ const StoreProfileEditor: React.FC<{
       </div>
 
       <input type="text" value={profile.name} onChange={(e) => onUpdate({ ...profile, name: e.target.value })} className="w-full p-3 bg-white border rounded-xl font-bold text-black" placeholder="Nombre" />
-      <input type="text" value={profile.whatsappNumber} onChange={(e) => onUpdate({ ...profile, whatsappNumber: e.target.value })} className="w-full p-3 bg-white border rounded-xl font-bold text-black" placeholder="WhatsApp Cocina" />
 
       <div className="grid grid-cols-2 gap-2">
         <button onClick={() => setMenuModalOpen(true)} className="py-3 bg-gray-800 text-white rounded-xl font-bold text-sm">Gestionar Menú</button>
@@ -105,30 +104,58 @@ const SettingsScreen: React.FC<SettingsScreenProps> = (props) => {
 
   const [localSettings, setLocalSettings] = useState(settings);
   const [localStoreProfiles, setLocalStoreProfiles] = useState(storeProfiles);
-  const [isDirty, setIsDirty] = useState(false);
 
   const [priceIncreaseModalStore, setPriceIncreaseModalStore] = useState<StoreProfile | null>(null);
   const [isUserModalOpen, setUserModalOpen] = useState(false);
 
-  useEffect(() => {
-    const settingsChanged = JSON.stringify(localSettings) !== JSON.stringify(settings);
-    const profilesChanged = JSON.stringify(localStoreProfiles) !== JSON.stringify(storeProfiles);
-    setIsDirty(settingsChanged || profilesChanged);
+  // isDirty calculado en tiempo real
+  const isDirty = React.useMemo(() => {
+    return JSON.stringify(localSettings) !== JSON.stringify(settings) ||
+      JSON.stringify(localStoreProfiles) !== JSON.stringify(storeProfiles);
   }, [localSettings, localStoreProfiles, settings, storeProfiles]);
 
+  // RE-SINCRONIZACIÓN: Si las props cambian (porque se guardó o cargó de DB) 
+  // y no estamos editando algo nuevo, actualizamos el estado local.
+  useEffect(() => {
+    if (!isDirty) {
+      setLocalSettings(settings);
+      setLocalStoreProfiles(storeProfiles);
+    }
+  }, [settings, storeProfiles, isDirty]);
+
   const handleSave = () => {
-    onSaveSettings(localSettings);
+    const mainProfile = localStoreProfiles.find(p => p.id === 'main');
+    const finalSettings = {
+      ...localSettings,
+      targetNumber: mainProfile ? mainProfile.whatsappNumber : localSettings.targetNumber
+    };
+
+    onSaveSettings(finalSettings);
     onUpdateStoreProfiles(localStoreProfiles);
-    setIsDirty(false);
+    alert("✅ Configuración guardada correctamente.");
   };
 
   const handleProfileUpdate = (updatedProfile: StoreProfile) => {
     setLocalStoreProfiles(prev => prev.map(p => p.id === updatedProfile.id ? updatedProfile : p));
+    if (updatedProfile.id === 'main') {
+      setLocalSettings(prev => ({ ...prev, targetNumber: updatedProfile.whatsappNumber }));
+    }
   };
 
   const handlePermanentProfileUpdate = (updatedProfile: StoreProfile) => {
     setLocalStoreProfiles(prev => prev.map(p => p.id === updatedProfile.id ? updatedProfile : p));
+    if (updatedProfile.id === 'main') {
+      const newSettings = { ...localSettings, targetNumber: updatedProfile.whatsappNumber };
+      setLocalSettings(newSettings);
+      onSaveSettings(newSettings);
+    }
     props.onUpdateStoreProfiles([updatedProfile]);
+  };
+
+  const handleTestWhatsApp = () => {
+    const num = localSettings.targetNumber.replace(/\D/g, '');
+    if (!num) { alert("Ingresa un número primero"); return; }
+    window.open(`https://wa.me/${num}?text=${encodeURIComponent('Prueba de conexión desde Margarita App 🍕')}`, '_blank');
   };
 
   const handlePriceIncrease = (percentage: number, categoryTitle: string) => {
@@ -191,21 +218,35 @@ const SettingsScreen: React.FC<SettingsScreenProps> = (props) => {
         ))}
 
         <div className="space-y-4">
-          <h3 className="font-bold text-gray-800 px-1 uppercase text-xs tracking-widest">Impresora Bluetooth</h3>
+          <h3 className="font-bold text-gray-800 px-1 uppercase text-xs tracking-widest">Hardware de Impresión</h3>
+
+          {/* Card de Impresión USB/Cable (PC) */}
+          <div className="p-4 bg-blue-50 rounded-xl border border-blue-100 space-y-3">
+            <div className="flex justify-between items-center text-sm">
+              <span className="font-bold text-blue-800 uppercase text-[10px]">Modo Sistema (Cable):</span>
+              <span className="font-black px-2 py-0.5 rounded-full text-[10px] uppercase bg-blue-100 text-blue-700">
+                LISTO / ACTIVO
+              </span>
+            </div>
+            <p className="text-[9px] text-blue-500 font-medium leading-tight">
+              Si usas una impresora con cable USB en tu PC, el sistema usará el diálogo de impresión de Windows automáticamente.
+            </p>
+          </div>
+
           <div className="p-4 bg-gray-50 rounded-xl border space-y-3">
             <div className="flex justify-between items-center text-sm">
-              <span className="font-bold text-gray-600 uppercase text-[10px]">Estado:</span>
+              <span className="font-bold text-gray-600 uppercase text-[10px]">Bluetooth (Solo Teléfonos):</span>
               <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] uppercase ${isPrinterConnected ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                 {isPrinterConnected ? `Conectada: ${printerName}` : 'No conectada'}
               </span>
             </div>
             {isPrinterConnected ? (
               <div className="grid grid-cols-2 gap-2">
-                <button onClick={onPrintTest} className="py-2.5 bg-blue-500 text-white rounded-lg font-bold text-xs uppercase">Imprimir Prueba</button>
+                <button onClick={onPrintTest} className="py-2.5 bg-blue-500 text-white rounded-lg font-bold text-xs uppercase">Prueba BT</button>
                 <button onClick={onDisconnectPrinter} className="py-2.5 bg-gray-600 text-white rounded-lg font-bold text-xs uppercase">Desconectar</button>
               </div>
             ) : (
-              <button onClick={onConnectPrinter} className="w-full py-3.5 bg-gray-800 text-white rounded-lg font-bold text-xs uppercase">Conectar Impresora</button>
+              <button onClick={onConnectPrinter} className="w-full py-3.5 bg-gray-800 text-white rounded-lg font-bold text-xs uppercase">Buscar Impresora BT</button>
             )}
           </div>
         </div>
@@ -220,6 +261,28 @@ const SettingsScreen: React.FC<SettingsScreenProps> = (props) => {
             <div className="p-3 bg-gray-50 rounded-xl border">
               <label className="block text-[8px] font-black text-gray-400 uppercase mb-1">Tasa BCV</label>
               <input type="number" value={localSettings.exchangeRateBCV} onChange={(e) => setLocalSettings({ ...localSettings, exchangeRateBCV: parseFloat(e.target.value) || 0 })} className="w-full bg-transparent font-bold text-black outline-none" />
+            </div>
+          </div>
+          <div className="p-3 bg-gray-50 rounded-xl border">
+            <label className="block text-[8px] font-black text-gray-400 uppercase mb-1">WhatsApp de Pedidos (Cocina)</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={localSettings.targetNumber}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, '');
+                  setLocalSettings({ ...localSettings, targetNumber: val });
+                  setLocalStoreProfiles(prev => prev.map(p => p.id === 'main' ? { ...p, whatsappNumber: val } : p));
+                }}
+                className="flex-grow bg-transparent font-bold text-black outline-none"
+                placeholder="Ej: 584120000000"
+              />
+              <button
+                onClick={handleTestWhatsApp}
+                className="px-3 py-1 bg-green-500 text-white text-[9px] font-black rounded-lg shadow-sm active:scale-95"
+              >
+                PROBAR
+              </button>
             </div>
           </div>
           <div className="p-4 bg-gray-50 rounded-xl border flex items-center justify-between">

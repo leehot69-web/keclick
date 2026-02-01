@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, MenuItem, StoreProfile, CartItem, CustomerDetails, SelectedModifier, MenuCategory, ModifierGroup, AppSettings, SaleRecord, ThemeName, PizzaConfiguration, PizzaIngredient, PizzaSize, User } from './types';
+import { View, MenuItem, StoreProfile, CartItem, CustomerDetails, SelectedModifier, MenuCategory, ModifierGroup, AppSettings, SaleRecord, ThemeName, PizzaConfiguration, PizzaIngredient, PizzaSize, User, DayClosure } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { MARGARITA_MENU_DATA, MARGARITA_MODIFIERS, PIZZA_BASE_PRICES, PIZZA_INGREDIENTS } from './constants';
 import MenuScreen from './components/MenuScreen';
@@ -10,6 +10,7 @@ import SplashScreen from './components/SplashScreen';
 import SettingsScreen from './components/SettingsScreen';
 import ReportsScreen from './components/ReportsScreen';
 import InstallPromptModal from './components/InstallPromptModal';
+import './print.css';
 import { generateTestPrintCommands, generateReceiptCommands } from './utils/escpos';
 import SalesHistoryModal from './components/SalesHistoryModal';
 import ConfirmOrderModal from './components/ConfirmOrderModal';
@@ -47,6 +48,7 @@ function App() {
   });
 
   const [reports, setReports] = useLocalStorage<SaleRecord[]>('app_sales_reports', []);
+  const [dayClosures, setDayClosures] = useLocalStorage<DayClosure[]>('app_day_closures', []);
   const [cart, setCart] = useLocalStorage<CartItem[]>('active_cart_data', []);
   const [editingReportId, setEditingReportId] = useLocalStorage<string | null>('active_editing_report_id', null);
   const [currentView, setCurrentView] = useState<View>('menu');
@@ -61,6 +63,18 @@ function App() {
   const [pendingRemoveItemId, setPendingRemoveItemId] = useState<string | null>(null);
   const [pizzaBuilderItem, setPizzaBuilderItem] = useState<MenuItem | null>(null);
   const [lastSoldRecord, setLastSoldRecord] = useState<{ cart: CartItem[], details: CustomerDetails } | null>(null);
+  const [receiptToPrint, setReceiptToPrint] = useState<{ cart: CartItem[], customer: CustomerDetails, waiter: string, title: string } | null>(null);
+
+  const memoizedProfiles = React.useMemo(() => [{
+    id: 'main',
+    name: businessName,
+    logo: businessLogo,
+    menu: menu,
+    whatsappNumber: settings.targetNumber,
+    modifierGroups: modifierGroups,
+    theme: theme,
+    paymentMethods: []
+  }], [businessName, businessLogo, menu, settings.targetNumber, modifierGroups, theme]);
 
   // --- Lógica PWA ---
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -213,25 +227,39 @@ function App() {
   };
 
   const handleReprintSaleRecord = async (sale: SaleRecord) => {
-    if (!printerCharacteristic) return;
-    try {
-      const customerDetailsForReprint: CustomerDetails = {
-        name: sale.customerName || (sale.tableNumber > 0 ? `Ref: ${sale.tableNumber}` : 'Pedido Directo'),
-        paymentMethod: sale.notes || 'No especificado',
-        phone: '',
-        instructions: '',
-      };
-      const commands = generateReceiptCommands(
-        sale.order as CartItem[],
-        customerDetailsForReprint,
-        { ...settings, businessName: businessName },
-        sale.waiter,
-        "RECIBO DE PEDIDO (COPIA)"
-      );
-      const data = textEncoder.encode(commands);
-      await sendDataToPrinter(printerCharacteristic, data);
-    } catch (error) {
-      console.error("Error al re-imprimir recibo:", error);
+    const customerDetailsForReprint: CustomerDetails = {
+      name: sale.customerName || (sale.tableNumber > 0 ? `Ref: ${sale.tableNumber}` : 'Pedido Directo'),
+      paymentMethod: sale.notes || 'No especificado',
+      phone: '',
+      instructions: '',
+    };
+
+    if (printerCharacteristic) {
+      try {
+        const commands = generateReceiptCommands(
+          sale.order as CartItem[],
+          customerDetailsForReprint,
+          { ...settings, businessName: businessName },
+          sale.waiter,
+          "RECIBO DE PEDIDO (COPIA)"
+        );
+        const data = textEncoder.encode(commands);
+        await sendDataToPrinter(printerCharacteristic, data);
+      } catch (error) {
+        console.error("Error al re-imprimir recibo:", error);
+      }
+    } else {
+      // Fallback a impresión por navegador (para PCs con cable)
+      setReceiptToPrint({
+        cart: sale.order as CartItem[],
+        customer: customerDetailsForReprint,
+        waiter: sale.waiter,
+        title: "COPIA DE RECIBO"
+      });
+      setTimeout(() => {
+        window.print();
+        setReceiptToPrint(null);
+      }, 500);
     }
   };
 
@@ -279,6 +307,58 @@ function App() {
 
   const handleStartNewDay = () => {
     if (window.confirm("¿Estás seguro de finalizar tu jornada actual? Las mesas abiertas se mantendrán en el sistema.")) {
+      const today = new Date().toISOString().split('T')[0];
+      const isAdminClosure = currentUser?.role === 'admin';
+      const closerName = currentUser?.name || 'Sistema';
+
+      // Filtrar los reportes que serán cerrados
+      const reportsToClose = reports.filter(r => {
+        const isTargetWaiter = isAdminClosure ? true : r.waiter === closerName;
+        return r.date === today && isTargetWaiter && !r.closed && r.notes !== 'PENDIENTE' && r.notes !== 'ANULADO';
+      });
+
+      if (reportsToClose.length === 0) {
+        alert('No hay ventas por cerrar en este momento.');
+        return;
+      }
+
+      // Calcular totales del cierre
+      const totalPaid = reportsToClose.reduce((acc, r) => r.type === 'refund' ? acc - r.total : acc + r.total, 0);
+      const totalPending = reports.filter(r => {
+        const isTargetWaiter = isAdminClosure ? true : r.waiter === closerName;
+        return r.date === today && isTargetWaiter && r.notes === 'PENDIENTE';
+      }).reduce((acc, r) => acc + r.total, 0);
+      const totalVoided = reports.filter(r => {
+        const isTargetWaiter = isAdminClosure ? true : r.waiter === closerName;
+        return r.date === today && isTargetWaiter && r.notes === 'ANULADO';
+      }).reduce((acc, r) => acc + r.total, 0);
+
+      // Crear el registro de cierre
+      const newClosure: DayClosure = {
+        id: Math.random().toString(36).substr(2, 9),
+        date: today,
+        closedAt: new Date().toISOString(),
+        closedBy: closerName,
+        isAdminClosure,
+        totalPaid,
+        totalPending,
+        totalVoided,
+        salesCount: reportsToClose.length,
+        reportIds: reportsToClose.map(r => r.id)
+      };
+
+      // Guardar el cierre
+      setDayClosures(prev => [newClosure, ...prev]);
+
+      // Marcar los reportes como cerrados
+      setReports(prev => prev.map(r => {
+        if (reportsToClose.find(rc => rc.id === r.id)) {
+          return { ...r, closed: true, closureId: newClosure.id };
+        }
+        return r;
+      }));
+
+      alert(`Cierre registrado exitosamente.\nTotal: $${totalPaid.toFixed(2)}\nVentas cerradas: ${reportsToClose.length}`);
       setCurrentUser(null);
       setCurrentView('menu');
     }
@@ -588,11 +668,50 @@ function App() {
           <div className="flex-1 overflow-hidden">
             {(() => {
               switch (currentView) {
-                case 'menu': return <MenuScreen menu={menu} cart={cart} onAddItem={handleAddItem} onUpdateQuantity={handleUpdateQuantity} onRemoveItem={handleRemoveItem} onClearCart={handleClearCart} cartItemCount={cart.reduce((acc, item) => acc + item.quantity, 0)} onOpenModifierModal={setModifierModalItem} onOpenPizzaBuilder={setPizzaBuilderItem} onGoToCart={() => setCurrentView('cart')} businessName={businessName} businessLogo={businessLogo} triggerShake={triggerCartShake} showInstallButton={showInstallBtn} onInstallApp={handleInstallClick} activeRate={activeRate} isEditing={!!editingReportId} />;
+                case 'menu': return <MenuScreen menu={menu} cart={cart} onAddItem={handleAddItem} onUpdateQuantity={handleUpdateQuantity} onRemoveItem={handleRemoveItem} onClearCart={handleClearCart} cartItemCount={cart.reduce((acc, item) => acc + item.quantity, 0)} onOpenModifierModal={setModifierModalItem} onOpenPizzaBuilder={setPizzaBuilderItem} onGoToCart={() => setCurrentView('cart')} businessName={businessName} businessLogo={businessLogo} triggerShake={triggerCartShake} showInstallButton={showInstallBtn} onInstallApp={handleInstallClick} activeRate={activeRate} isEditing={!!editingReportId} theme={theme} />;
                 case 'cart': return <CartScreen cart={cart} onUpdateQuantity={handleUpdateQuantity} onRemoveItem={handleRemoveItem} onClearCart={handleClearCart} onBackToMenu={() => setCurrentView('menu')} onGoToCheckout={() => setCurrentView('checkout')} onEditItem={(id) => { const item = cart.find(i => i.id === id); if (item) { setEditingCartItemId(id); for (const cat of menu) { const original = cat.items.find(i => i.name === item.name); if (original) { setModifierModalItem(original); break; } } } }} activeRate={activeRate} isEditing={!!editingReportId} />;
                 case 'checkout': return <CheckoutScreen cart={cart} customerDetails={customerDetails} paymentMethods={['Efectivo', 'Pago Móvil', 'Zelle', 'Divisas']} onUpdateDetails={setCustomerDetails} onBack={() => setCurrentView('cart')} onSubmitOrder={() => setConfirmOrderModalOpen(true)} onEditUserDetails={handleLogout} onClearCart={handleClearCart} activeRate={activeRate} isEditing={!!editingReportId} />;
-                case 'settings': return <SettingsScreen settings={settings} onSaveSettings={setSettings} onGoToTables={() => setCurrentView('menu')} waiter={currentUser?.name || ''} onLogout={handleLogout} waiterAssignments={{}} onSaveAssignments={{}} storeProfiles={[{ id: 'main', name: businessName, logo: businessLogo, menu: menu, whatsappNumber: settings.targetNumber, modifierGroups: modifierGroups, theme: theme, paymentMethods: [] }]} onUpdateStoreProfiles={(profiles) => { const p = Array.isArray(profiles) ? profiles[0] : (typeof profiles === 'function' ? profiles([])[0] : null); if (p) { setBusinessName(p.name); setMenu(p.menu); setModifierGroups(p.modifierGroups); setTheme(p.theme); } }} activeTableNumbers={[]} onBackupAllSalesData={() => { }} onClearAllSalesData={() => { if (window.confirm("¿Borrar definitivamente todo el historial?")) { setReports([]); } }} onConnectPrinter={handleConnectPrinter} onDisconnectPrinter={handleDisconnectPrinter} isPrinterConnected={isPrinterConnected} printerName={printerDevice?.name} onPrintTest={handlePrintTest} pizzaIngredients={pizzaIngredients} pizzaBasePrices={pizzaBasePrices} onUpdatePizzaConfig={(ingredients, basePrices) => { setPizzaIngredients(ingredients); setPizzaBasePrices(basePrices); }} />;
-                case 'reports': return <ReportsScreen reports={reports} onGoToTables={() => setCurrentView('menu')} onDeleteReports={(ids) => { setReports(prev => prev.filter(r => !ids.includes(r.id))); return true; }} settings={settings} onStartNewDay={handleStartNewDay} currentWaiter={currentUser?.name || ''} onOpenSalesHistory={() => setIsSalesHistoryModalOpen(true)} onReprintSaleRecord={handleReprintSaleRecord} isPrinterConnected={isPrinterConnected} onEditPendingReport={handleEditPendingReport} onVoidReport={handleVoidReport} isAdmin={currentUser?.role === 'admin'} />;
+                case 'settings': {
+                  return <SettingsScreen
+                    settings={settings}
+                    onSaveSettings={setSettings}
+                    onGoToTables={() => setCurrentView('menu')}
+                    waiter={currentUser?.name || ''}
+                    onLogout={handleLogout}
+                    waiterAssignments={{}}
+                    onSaveAssignments={{}}
+                    storeProfiles={memoizedProfiles}
+                    onUpdateStoreProfiles={(profiles) => {
+                      const p = Array.isArray(profiles) ? profiles[0] : (typeof profiles === 'function' ? profiles([])[0] : null);
+                      if (p) {
+                        setBusinessName(p.name);
+                        setMenu(p.menu);
+                        setModifierGroups(p.modifierGroups);
+                        setTheme(p.theme);
+                        setSettings(prev => ({ ...prev, targetNumber: p.whatsappNumber }));
+                      }
+                    }}
+                    activeTableNumbers={[]}
+                    onBackupAllSalesData={() => { }}
+                    onClearAllSalesData={() => {
+                      if (window.confirm("¿Borrar definitivamente todo el historial?")) {
+                        setReports([]);
+                      }
+                    }}
+                    onConnectPrinter={handleConnectPrinter}
+                    onDisconnectPrinter={handleDisconnectPrinter}
+                    isPrinterConnected={isPrinterConnected}
+                    printerName={printerDevice?.name}
+                    onPrintTest={handlePrintTest}
+                    pizzaIngredients={pizzaIngredients}
+                    pizzaBasePrices={pizzaBasePrices}
+                    onUpdatePizzaConfig={(ingredients, basePrices) => {
+                      setPizzaIngredients(ingredients);
+                      setPizzaBasePrices(basePrices);
+                    }}
+                  />;
+                }
+                case 'reports': return <ReportsScreen reports={reports} dayClosures={dayClosures} onGoToTables={() => setCurrentView('menu')} onDeleteReports={(ids) => { setReports(prev => prev.filter(r => !ids.includes(r.id))); return true; }} settings={settings} onStartNewDay={handleStartNewDay} currentWaiter={currentUser?.name || ''} onOpenSalesHistory={() => setIsSalesHistoryModalOpen(true)} onReprintSaleRecord={handleReprintSaleRecord} isPrinterConnected={isPrinterConnected} onEditPendingReport={handleEditPendingReport} onVoidReport={handleVoidReport} isAdmin={currentUser?.role === 'admin'} />;
                 case 'success': return <SuccessScreen cart={lastSoldRecord?.cart || []} customerDetails={lastSoldRecord?.details || customerDetails} onStartNewOrder={handleStartNewOrder} onReprint={() => handlePrintOrder(undefined, true)} isPrinterConnected={isPrinterConnected} activeRate={activeRate} />;
                 default: return null;
               }
@@ -705,6 +824,53 @@ function App() {
           onInstall={triggerNativeInstall}
           platform={platform}
         />
+      )}
+
+      {/* ÁREA DE IMPRESIÓN PARA NAVEGADOR (OCULTA) */}
+      {receiptToPrint && (
+        <div id="printable-receipt" className="p-4 bg-white text-black font-mono text-[12px]">
+          <div className="text-center font-black text-lg uppercase mb-2 border-b-2 border-dashed border-black pb-2">
+            {businessName}
+          </div>
+          <div className="text-center font-bold mb-4">
+            {receiptToPrint.title || 'RECIBO DE PEDIDO'}
+          </div>
+          <div className="space-y-1 mb-4">
+            <div className="flex justify-between"><span>FECHA:</span> <span>{new Date().toLocaleDateString()}</span></div>
+            <div className="flex justify-between"><span>HORA:</span> <span>{new Date().toLocaleTimeString()}</span></div>
+            <div className="flex justify-between"><span>MESERO:</span> <span>{receiptToPrint.waiter}</span></div>
+            <div className="flex justify-between"><span>REF:</span> <span>{receiptToPrint.customer.name}</span></div>
+          </div>
+          <div className="border-b border-dashed border-black my-2"></div>
+          <div className="space-y-3">
+            {receiptToPrint.cart.map((item, idx) => (
+              <div key={idx} className="flex flex-col">
+                <div className="flex justify-between font-bold">
+                  <span>{item.quantity}X {item.name}</span>
+                  <span>${((item.price + item.selectedModifiers.reduce((acc, m) => acc + m.option.price, 0)) * item.quantity).toFixed(2)}</span>
+                </div>
+                {item.selectedModifiers.map((mod, midx) => (
+                  <div key={midx} className="text-[10px] ml-2 italic">
+                    - {mod.option.name}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className="border-t-2 border-dashed border-black mt-4 pt-2">
+            <div className="flex justify-between text-lg font-black">
+              <span>TOTAL:</span>
+              <span>${receiptToPrint.cart.reduce((acc, item) => acc + ((item.price + item.selectedModifiers.reduce((s, m) => s + m.option.price, 0)) * item.quantity), 0).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm mt-1">
+              <span>METODO:</span>
+              <span>{receiptToPrint.customer.paymentMethod}</span>
+            </div>
+          </div>
+          <div className="text-center mt-6 text-[10px]">
+            ¡GRACIAS POR SU COMPRA!
+          </div>
+        </div>
       )}
     </>
   );

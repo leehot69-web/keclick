@@ -1,9 +1,10 @@
 
 import React, { useState, useMemo } from 'react';
-import { SaleRecord, OrderItem, StoreProfile, AppSettings, CartItem, View } from '../types';
+import { SaleRecord, OrderItem, StoreProfile, AppSettings, CartItem, View, DayClosure } from '../types';
 
 interface ReportsScreenProps {
     reports: SaleRecord[];
+    dayClosures: DayClosure[];
     onGoToTables: () => void;
     onDeleteReports: (idsToDelete: string[]) => boolean;
     storeProfile?: StoreProfile;
@@ -29,7 +30,8 @@ const DayClosureModal: React.FC<{
     const exchangeRate = settings.activeExchangeRate === 'bcv' ? settings.exchangeRateBCV : settings.exchangeRateParallel;
     const today = new Date().toISOString().split('T')[0];
     const filteredReports = reports.filter(r => r.date === today && (isAdmin ? true : r.waiter === currentWaiter));
-    const totalPaid = filteredReports.reduce((acc, r) => (r.notes !== 'PENDIENTE' && r.notes !== 'ANULADO') ? acc + (r.type === 'refund' ? -r.total : r.total) : acc, 0);
+    // Solo sumamos al total lo que NO esté cerrado
+    const totalPaid = filteredReports.reduce((acc, r) => (r.notes !== 'PENDIENTE' && r.notes !== 'ANULADO' && !r.closed) ? acc + (r.type === 'refund' ? -r.total : r.total) : acc, 0);
     const totalPending = filteredReports.reduce((acc, r) => r.notes === 'PENDIENTE' ? acc + r.total : acc, 0);
 
     return (
@@ -63,9 +65,10 @@ const DayClosureModal: React.FC<{
     );
 };
 
-const ReportsScreen: React.FC<ReportsScreenProps> = ({ reports, onGoToTables, onDeleteReports, storeProfile, settings, onStartNewDay, currentWaiter, onOpenSalesHistory, onReprintSaleRecord, isPrinterConnected, onEditPendingReport, onVoidReport, isAdmin }) => {
+const ReportsScreen: React.FC<ReportsScreenProps> = ({ reports, dayClosures, onGoToTables, onDeleteReports, storeProfile, settings, onStartNewDay, currentWaiter, onOpenSalesHistory, onReprintSaleRecord, isPrinterConnected, onEditPendingReport, onVoidReport, isAdmin }) => {
     const [activeSale, setActiveSale] = useState<SaleRecord | null>(null);
     const [showClosureModal, setShowClosureModal] = useState(false);
+    const [showClosuresHistory, setShowClosuresHistory] = useState(false);
     const exchangeRate = settings ? (settings.activeExchangeRate === 'bcv' ? settings.exchangeRateBCV : settings.exchangeRateParallel) : 1;
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
@@ -73,21 +76,29 @@ const ReportsScreen: React.FC<ReportsScreenProps> = ({ reports, onGoToTables, on
         return reports.filter(r => (isAdmin ? true : r.waiter === currentWaiter) && r.date === selectedDate);
     }, [reports, currentWaiter, selectedDate, isAdmin]);
 
-    const totalPaid = filteredByWaiterAndDate.reduce((sum, r) => (r.notes !== 'PENDIENTE' && r.notes !== 'ANULADO') ? (r.type === 'refund' ? sum - r.total : sum + r.total) : sum, 0);
+    // Solo sumamos al "Total Cobrado" los registros que NO estén cerrados (closed)
+    const totalPaid = filteredByWaiterAndDate.reduce((sum, r) => (r.notes !== 'PENDIENTE' && r.notes !== 'ANULADO' && !r.closed) ? (r.type === 'refund' ? sum - r.total : sum + r.total) : sum, 0);
     const totalPending = filteredByWaiterAndDate.reduce((sum, r) => r.notes === 'PENDIENTE' ? sum + r.total : sum, 0);
 
     const isToday = selectedDate === new Date().toISOString().split('T')[0];
 
-    const getStatusColor = (notes?: string) => {
-        if (notes === 'PENDIENTE') return 'bg-amber-400';
-        if (notes === 'ANULADO') return 'bg-gray-400';
+    const getStatusColor = (report: SaleRecord) => {
+        if (report.notes === 'PENDIENTE') return 'bg-amber-400';
+        if (report.notes === 'ANULADO') return 'bg-gray-400';
+        if (report.closed) return 'bg-gray-300'; // Cerrado = gris
         return 'bg-green-500';
     };
 
-    const getBadgeClass = (notes?: string) => {
-        if (notes === 'PENDIENTE') return 'bg-amber-100 text-amber-600';
-        if (notes === 'ANULADO') return 'bg-gray-100 text-gray-600';
+    const getBadgeClass = (report: SaleRecord) => {
+        if (report.notes === 'PENDIENTE') return 'bg-amber-100 text-amber-600';
+        if (report.notes === 'ANULADO') return 'bg-gray-100 text-gray-600';
+        if (report.closed) return 'bg-gray-200 text-gray-500'; // Cerrado = gris
         return 'bg-green-100 text-green-600';
+    };
+
+    const getClosedLabel = (report: SaleRecord) => {
+        if (report.closed) return 'CERRADO';
+        return report.notes || 'PAGADO';
     };
 
     return (
@@ -98,7 +109,9 @@ const ReportsScreen: React.FC<ReportsScreenProps> = ({ reports, onGoToTables, on
                     <div className="text-center">
                         <h1 className="text-sm font-black uppercase text-gray-800 leading-none">Ventas: {isAdmin ? 'Global' : currentWaiter}</h1>
                     </div>
-                    <div className="w-10"></div>
+                    <button onClick={() => setShowClosuresHistory(true)} className="p-2 bg-purple-100 rounded-xl text-purple-600" title="Ver Cierres Anteriores">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    </button>
                 </header>
 
                 <div className="bg-gray-50 border-b p-4 flex items-center justify-between shadow-inner">
@@ -133,16 +146,16 @@ const ReportsScreen: React.FC<ReportsScreenProps> = ({ reports, onGoToTables, on
 
                     <div className="space-y-3">
                         {filteredByWaiterAndDate.map(report => (
-                            <div key={report.id} onClick={() => setActiveSale(report)} className="bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center active:bg-gray-50 transition-colors cursor-pointer shadow-sm">
+                            <div key={report.id} onClick={() => setActiveSale(report)} className={`p-4 rounded-2xl border flex justify-between items-center active:bg-gray-50 transition-colors cursor-pointer shadow-sm ${report.closed ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-100'}`}>
                                 <div className="flex gap-3 items-center">
-                                    <div className={`w-2 h-10 rounded-full ${getStatusColor(report.notes)}`}></div>
+                                    <div className={`w-2 h-10 rounded-full ${getStatusColor(report)}`}></div>
                                     <div>
-                                        <p className={`font-bold text-sm leading-none mb-1 ${report.notes === 'ANULADO' ? 'text-gray-400 line-through' : 'text-black'}`}>{report.customerName || (report.tableNumber > 0 ? `Ref: ${report.tableNumber}` : 'Pedido')}</p>
-                                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${getBadgeClass(report.notes)}`}>{report.notes}</span>
+                                        <p className={`font-bold text-sm leading-none mb-1 ${report.notes === 'ANULADO' || report.closed ? 'text-gray-400' : 'text-black'} ${report.notes === 'ANULADO' ? 'line-through' : ''}`}>{report.customerName || (report.tableNumber > 0 ? `Ref: ${report.tableNumber}` : 'Pedido')}</p>
+                                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${getBadgeClass(report)}`}>{getClosedLabel(report)}</span>
                                     </div>
                                 </div>
                                 <div className="text-right">
-                                    <p className={`font-black text-lg leading-none ${report.notes === 'ANULADO' ? 'text-gray-300' : 'text-black'}`}>${report.total.toFixed(2)}</p>
+                                    <p className={`font-black text-lg leading-none ${report.notes === 'ANULADO' || report.closed ? 'text-gray-400' : 'text-black'}`}>${report.total.toFixed(2)}</p>
                                     <p className="text-[10px] font-bold text-gray-400 mt-1">Bs. {(report.total * exchangeRate).toFixed(2)}</p>
                                 </div>
                             </div>
@@ -156,7 +169,7 @@ const ReportsScreen: React.FC<ReportsScreenProps> = ({ reports, onGoToTables, on
                     <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-start mb-4">
                             <h3 className="text-lg font-black text-black uppercase tracking-tight">Detalle de Venta</h3>
-                            <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${getBadgeClass(activeSale.notes)}`}>{activeSale.notes}</span>
+                            <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${getBadgeClass(activeSale)}`}>{getClosedLabel(activeSale)}</span>
                         </div>
                         <div className="space-y-2 mb-6 max-h-60 overflow-y-auto">
                             {activeSale.order.map((item: any, idx) => (
@@ -215,7 +228,13 @@ const ReportsScreen: React.FC<ReportsScreenProps> = ({ reports, onGoToTables, on
                                     Anular Ticket (Admin PIN)
                                 </button>
                             )}
-                            <button onClick={() => onReprintSaleRecord(activeSale)} disabled={!isPrinterConnected || activeSale.notes === 'ANULADO'} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black uppercase tracking-widest disabled:bg-gray-400">Imprimir Recibo</button>
+                            <button
+                                onClick={() => onReprintSaleRecord(activeSale)}
+                                disabled={activeSale.notes === 'ANULADO'}
+                                className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest transition-all ${isPrinterConnected ? 'bg-blue-600 text-white' : 'bg-gray-800 text-white shadow-xl'}`}
+                            >
+                                {isPrinterConnected ? 'Imprimir Recibo' : 'Imprimir (PC / Cable)'}
+                            </button>
                             <button onClick={() => setActiveSale(null)} className="w-full py-3 bg-gray-200 text-gray-700 rounded-2xl font-bold uppercase tracking-widest">Cerrar Detalle</button>
                         </div>
                     </div>
@@ -223,6 +242,61 @@ const ReportsScreen: React.FC<ReportsScreenProps> = ({ reports, onGoToTables, on
             )}
 
             {showClosureModal && settings && onStartNewDay && <DayClosureModal reports={reports} settings={settings} onClose={() => setShowClosureModal(false)} onStartNewDay={onStartNewDay} currentWaiter={currentWaiter} isAdmin={isAdmin} />}
+
+            {/* Modal de Historial de Cierres */}
+            {showClosuresHistory && (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm overflow-y-auto" onClick={() => setShowClosuresHistory(false)}>
+                    <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl my-auto" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center p-4 border-b">
+                            <h2 className="text-xl font-black uppercase text-gray-800 tracking-tighter">Historial de Cierres</h2>
+                            <button onClick={() => setShowClosuresHistory(false)} className="p-2 bg-gray-100 rounded-full"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                        </div>
+                        <div className="p-4 max-h-[70vh] overflow-y-auto space-y-3">
+                            {dayClosures
+                                .filter(c => isAdmin ? true : c.closedBy === currentWaiter)
+                                .filter(c => c.date === selectedDate)
+                                .length === 0 ? (
+                                <div className="py-12 text-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-gray-200 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    <p className="text-gray-400 italic">No hay cierres registrados para esta fecha.</p>
+                                </div>
+                            ) : (
+                                dayClosures
+                                    .filter(c => isAdmin ? true : c.closedBy === currentWaiter)
+                                    .filter(c => c.date === selectedDate)
+                                    .map(closure => (
+                                        <div key={closure.id} className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-100 rounded-2xl p-4">
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div>
+                                                    <p className="text-[10px] font-black text-green-600 uppercase">Cierre #{closure.id.slice(-4)}</p>
+                                                    <p className="text-sm font-bold text-gray-800">{new Date(closure.closedAt).toLocaleTimeString()}</p>
+                                                </div>
+                                                <span className={`text-[9px] font-black px-2 py-1 rounded-full uppercase ${closure.isAdminClosure ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>
+                                                    {closure.isAdminClosure ? 'Admin' : closure.closedBy}
+                                                </span>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2 text-sm">
+                                                <div className="bg-white/60 rounded-lg p-2">
+                                                    <p className="text-[9px] font-bold text-gray-400 uppercase">Total Cerrado</p>
+                                                    <p className="text-lg font-black text-green-700">${closure.totalPaid.toFixed(2)}</p>
+                                                </div>
+                                                <div className="bg-white/60 rounded-lg p-2">
+                                                    <p className="text-[9px] font-bold text-gray-400 uppercase">Ventas</p>
+                                                    <p className="text-lg font-black text-gray-700">{closure.salesCount}</p>
+                                                </div>
+                                            </div>
+                                            {closure.totalPending > 0 && (
+                                                <div className="mt-2 text-[10px] font-bold text-amber-600">
+                                                    ⚠️ Pendiente al cierre: ${closure.totalPending.toFixed(2)}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 };

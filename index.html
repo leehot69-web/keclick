@@ -144,6 +144,91 @@
       background: var(--brand-color) !important;
     }
 
+    /* --- TEMA MIDNIGHT AURA --- */
+    body.theme-midnight {
+      --brand-color: #00D2FF;
+      --brand-color-dark: #00A8CC;
+      --brand-shadow-color: rgba(0, 210, 255, 0.5);
+      --page-bg-color: transparent;
+      --accent-color: #00D2FF;
+      --glass-bg: rgba(255, 255, 255, 0.05);
+      --glass-border: rgba(255, 255, 255, 0.1);
+      --text-main: #FFFFFF;
+      background: radial-gradient(circle at top right, #1e1e2f, #0a0a12, #161625) !important;
+      background-size: 400% 400%;
+      animation: auraFlow 20s ease infinite;
+    }
+
+    @keyframes auraFlow {
+      0% {
+        background-position: 0% 0%;
+      }
+
+      50% {
+        background-position: 100% 100%;
+      }
+
+      100% {
+        background-position: 0% 0%;
+      }
+    }
+
+    body.theme-midnight #root>div {
+      background: transparent !important;
+    }
+
+    body.theme-midnight .bg-white,
+    body.theme-midnight .bg-gray-50,
+    body.theme-midnight .bg-red-50 {
+      background-color: var(--glass-bg) !important;
+      backdrop-filter: blur(20px) !important;
+      -webkit-backdrop-filter: blur(20px) !important;
+      border: 1px solid var(--glass-border) !important;
+      color: #fff !important;
+    }
+
+    body.theme-midnight button,
+    body.theme-midnight input,
+    body.theme-midnight select {
+      background-color: rgba(255, 255, 255, 0.08) !important;
+      backdrop-filter: blur(10px) !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      color: white !important;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3) !important;
+    }
+
+    body.theme-midnight .text-gray-800,
+    body.theme-midnight .text-gray-900,
+    body.theme-midnight .text-gray-600 {
+      color: #fff !important;
+    }
+
+    body.theme-midnight .bg-brand,
+    body.theme-midnight .bg-red-600 {
+      background: linear-gradient(135deg, #00D2FF 0%, #3a7bd5 100%) !important;
+      box-shadow: 0 0 20px rgba(0, 210, 255, 0.4) !important;
+      color: white !important;
+    }
+
+    body.theme-midnight .border-t,
+    body.theme-midnight .border-b,
+    body.theme-midnight .border-l,
+    body.theme-midnight .border-r,
+    body.theme-midnight .border {
+      border-color: rgba(255, 255, 255, 0.1) !important;
+    }
+
+    body.theme-midnight img {
+      filter: drop-shadow(0 0 10px rgba(0, 210, 255, 0.3));
+    }
+
+    body.theme-midnight .rounded-2xl,
+    body.theme-midnight .rounded-3xl,
+    body.theme-midnight .rounded-\[38px\] {
+      border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    }
+
+
     html,
     body,
     #root {

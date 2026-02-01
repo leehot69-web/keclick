@@ -180,6 +180,7 @@ export interface SaleRecord {
   notes?: string;
   orderCode?: string; // Added missing orderCode property for table audit
   customerName?: string;
+  closed?: boolean;
 }
 
 export type UserRole = 'admin' | 'mesero' | 'cajero';
@@ -202,6 +203,19 @@ export interface AppSettings {
   users: User[]; // Lista de usuarios con acceso al sistema
   targetNumber: string; // Número de WhatsApp de la cocina
   waitersCanCharge: boolean; // Si los meseros pueden procesar cobros
+}
+// Registro de cierre de caja/turno
+export interface DayClosure {
+  id: string;
+  date: string;
+  closedAt: string; // ISO timestamp del momento del cierre
+  closedBy: string; // Nombre del usuario que cerró
+  isAdminClosure: boolean; // Si fue cierre de admin (global) o de mesero individual
+  totalPaid: number;
+  totalPending: number;
+  totalVoided: number;
+  salesCount: number;
+  reportIds: string[]; // IDs de las ventas incluidas en este cierre
 }
 
 export type WaiterAssignments = Record<string, number[]>;
