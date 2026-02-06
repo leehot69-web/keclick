@@ -958,7 +958,7 @@ function App() {
   if (!isAppReady) return <SplashScreen onEnter={() => setIsAppReady(true)} />;
 
   if (settings.storeId === 'NEW_STORE') {
-    return <RegistrationScreen onRegister={handleRegister} />;
+    return <RegistrationScreen onRegister={handleRegister} onJoin={handleJoin} />;
   }
 
   if (!currentUser) {
