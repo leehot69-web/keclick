@@ -13,6 +13,25 @@ export const useSupabaseSync = (
     modifierGroups: any[],
     currentStoreId: string | null
 ) => {
+    const mapSaleFromSupabase = (s: any): SaleRecord => ({
+        ...s,
+        id: s.id,
+        storeId: s.store_id,
+        date: s.date,
+        time: s.time,
+        customerName: s.customer_name,
+        tableNumber: s.table_number,
+        waiter: s.waiter,
+        total: s.total,
+        order: s.order_data,
+        notes: s.notes,
+        orderCode: s.order_code,
+        closed: s.closed,
+        type: s.type,
+        auditNotes: s.audit_notes,
+        createdAt: s.created_at
+    });
+
     // 1. Carga inicial (Solo si hay un storeId activo)
     useEffect(() => {
         if (!currentStoreId) return;
@@ -26,12 +45,7 @@ export const useSupabaseSync = (
                 .order('created_at', { ascending: false });
 
             if (salesData) {
-                setReports(salesData.map(s => ({
-                    ...s,
-                    storeId: s.store_id,
-                    order: s.order_data,
-                    auditNotes: s.audit_notes
-                })));
+                setReports(salesData.map(mapSaleFromSupabase));
             }
 
             // Cargar Cierres de la tienda actual
@@ -82,24 +96,14 @@ export const useSupabaseSync = (
                 filter: `store_id=eq.${currentStoreId}`
             }, (payload) => {
                 if (payload.eventType === 'INSERT') {
-                    const newSale = payload.new as any;
-                    setReports(prev => [
-                        {
-                            ...newSale,
-                            storeId: newSale.store_id,
-                            order: newSale.order_data,
-                            auditNotes: newSale.audit_notes
-                        },
-                        ...prev
-                    ]);
+                    const newSale = mapSaleFromSupabase(payload.new);
+                    setReports(prev => {
+                        if (prev.some(r => r.id === newSale.id)) return prev;
+                        return [newSale, ...prev];
+                    });
                 } else if (payload.eventType === 'UPDATE') {
-                    const updatedSale = payload.new as any;
-                    setReports(prev => prev.map(r => r.id === updatedSale.id ? {
-                        ...updatedSale,
-                        storeId: updatedSale.store_id,
-                        order: updatedSale.order_data,
-                        auditNotes: updatedSale.audit_notes
-                    } : r));
+                    const updatedSale = mapSaleFromSupabase(payload.new);
+                    setReports(prev => prev.map(r => r.id === updatedSale.id ? updatedSale : r));
                 } else if (payload.eventType === 'DELETE') {
                     setReports(prev => prev.filter(r => r.id !== payload.old.id));
                 }

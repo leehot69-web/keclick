@@ -26,23 +26,43 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
     userRole,
     waitersCanCharge,
 }) => {
+    const [isLoading, setIsLoading] = React.useState(false);
+
     if (!isOpen) return null;
 
     const isWaiter = userRole === 'mesero';
     // canCharge es true si no es mesero, O si siendo mesero el permiso no está apagado explícitamente
-    const canCharge = !isWaiter || waitersCanCharge !== false;
+    const canCharge = (!isWaiter || waitersCanCharge !== false) && !isLoading;
+
+    const handleAction = async (action: () => void | Promise<void>) => {
+        if (isLoading) return;
+        setIsLoading(true);
+        try {
+            await action();
+        } catch (error) {
+            console.error("Action failed:", error);
+            setIsLoading(false); // Re-enable only on error
+        }
+    };
 
     return (
         <div
             className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
-            onClick={onClose}
+            onClick={isLoading ? undefined : onClose}
             aria-modal="true"
             role="dialog"
         >
             <div
-                className="bg-white rounded-[2.5rem] shadow-2xl p-6 sm:p-8 w-full max-w-md border-t-8 border-green-600 overflow-hidden"
+                className="bg-white rounded-[2.5rem] shadow-2xl p-6 sm:p-8 w-full max-w-md border-t-8 border-green-600 overflow-hidden relative"
                 onClick={(e) => e.stopPropagation()}
             >
+                {isLoading && (
+                    <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-50 flex flex-col items-center justify-center">
+                        <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+                        <p className="mt-4 font-black text-green-700 uppercase tracking-widest text-xs">Procesando...</p>
+                    </div>
+                )}
+
                 <div className="text-center mb-8">
                     <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
@@ -61,7 +81,7 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
                 <div className="space-y-3">
                     {/* OPCIÓN 1: COBRO TOTAL (LO QUE PIDIÓ EL USUARIO) */}
                     <button
-                        onClick={onConfirmPrintAndSend}
+                        onClick={() => handleAction(onConfirmPrintAndSend)}
                         disabled={!canCharge}
                         className={`w-full flex flex-col items-center justify-center py-5 px-4 font-black rounded-2xl transition-all transform active:scale-95 shadow-xl border-b-4 ${!canCharge ? 'bg-gray-400 border-gray-500 cursor-not-allowed text-gray-200' : 'text-white bg-green-600 hover:bg-green-700 shadow-green-100 border-green-800'}`}
                     >
@@ -74,7 +94,7 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
 
                     {/* OPCIÓN 2: COBRO RÁPIDO SIN IMPRESORA */}
                     <button
-                        onClick={onConfirmSendOnly}
+                        onClick={() => handleAction(onConfirmSendOnly)}
                         disabled={!canCharge}
                         className={`w-full py-4 font-black rounded-2xl transition-all flex flex-col items-center justify-center ${!canCharge ? 'border-2 border-gray-300 bg-gray-50 text-gray-400 cursor-not-allowed' : 'text-green-700 bg-white border-2 border-green-600 hover:bg-green-50'}`}
                     >
@@ -91,14 +111,15 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
 
                     <div className="grid grid-cols-2 gap-2">
                         <button
-                            onClick={onConfirmSendUnpaid}
-                            className="flex flex-col items-center justify-center py-4 bg-amber-50 text-amber-700 rounded-xl font-black text-[9px] uppercase border border-amber-200"
+                            onClick={() => handleAction(onConfirmSendUnpaid)}
+                            disabled={isLoading}
+                            className={`flex flex-col items-center justify-center py-4 bg-amber-50 text-amber-700 rounded-xl font-black text-[9px] uppercase border border-amber-200 transition-opacity ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                             {isEdit ? 'Seguir Pendiente' : 'Enviar sin Cobrar'}
                         </button>
                         <button
-                            onClick={onConfirmPrintOnly}
+                            onClick={() => handleAction(onConfirmPrintOnly)}
                             disabled={!canCharge}
                             className={`flex flex-col items-center justify-center py-4 rounded-xl font-black text-[9px] uppercase border ${!canCharge ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-gray-50 text-gray-600 border-gray-200'}`}
                         >
@@ -106,7 +127,7 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
                             Registro Interno
                         </button>
                     </div>
-                    {!canCharge && (
+                    {!canCharge && !isLoading && (
                         <p className="mt-4 text-[10px] text-center font-bold text-amber-600 bg-amber-50 p-3 rounded-xl border border-amber-100 uppercase leading-tight">
                             En esta configuración, los Meseros no pueden cobrar. El cobro final debe ser realizado por Caja o Admin.
                         </p>
@@ -115,7 +136,8 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
 
                 <button
                     onClick={onClose}
-                    className="w-full mt-6 py-3 font-bold text-gray-400 uppercase tracking-widest text-[10px] hover:text-gray-600 transition-colors"
+                    disabled={isLoading}
+                    className="w-full mt-6 py-3 font-bold text-gray-400 uppercase tracking-widest text-[10px] hover:text-gray-600 transition-colors disabled:opacity-0"
                 >
                     Cancelar y Volver
                 </button>
