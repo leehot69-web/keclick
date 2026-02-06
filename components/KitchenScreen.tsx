@@ -129,7 +129,14 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({
                             <div key={order.id} className={`rounded-3xl overflow-hidden border flex flex-col transition-all duration-300 ${pinnedOrders.includes(order.id) ? 'bg-gray-800 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)] scale-[1.02] z-10' : 'bg-gray-800 border-gray-700/50'}`}>
                                 <div className="bg-gray-700/50 p-4 border-b border-gray-700 flex justify-between items-center relative">
                                     <div className="flex-1 min-w-0">
-                                        <h3 className="font-black text-lg uppercase truncate leading-none mb-1">{order.customerName || `Mesa ${order.tableNumber}`}</h3>
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="font-black text-lg uppercase truncate leading-none mb-1">{order.customerName || `Mesa ${order.tableNumber}`}</h3>
+                                            {order.notes !== 'PENDIENTE' && (
+                                                <span className="px-1.5 py-0.5 bg-green-500 text-[8px] font-black rounded text-white uppercase animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.5)]">
+                                                    PAGADO
+                                                </span>
+                                            )}
+                                        </div>
                                         <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">{order.time} • {order.waiter}</p>
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -164,7 +171,7 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({
                                     })()}
                                 </div>
 
-                                <div className="p-3 space-y-2">
+                                <div className="p-3 space-y-2 flex-1">
                                     {order.order.map((item: any, idx: number) => {
                                         const itemStations = (item.kitchenStations && item.kitchenStations.length > 0) ? item.kitchenStations : ['general'];
                                         const isMyStation = userStation === 'all' || itemStations.includes(userStation);
@@ -247,6 +254,14 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({
                                         );
                                     })}
                                 </div>
+
+                                <button
+                                    onClick={() => onCloseOrder(order.id)}
+                                    className="m-3 p-4 bg-gray-900 hover:bg-black text-gray-400 hover:text-white border border-gray-700 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all flex items-center justify-center gap-2"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                    Cerrar Comanda
+                                </button>
                             </div>
                         ))}
                     </div>
@@ -256,7 +271,7 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({
                 <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div> Sistema de Cocina Keclick KDS v2.0</span>
                 <span className="tabular-nums opacity-50">{now.toLocaleTimeString()}</span>
             </footer>
-        </div>
+        </div >
     );
 };
 
