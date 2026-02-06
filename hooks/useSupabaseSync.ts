@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '../utils/supabase';
 import { AppSettings, SaleRecord, DayClosure, StoreProfile } from '../types';
 
@@ -13,6 +13,8 @@ export const useSupabaseSync = (
     modifierGroups: any[],
     currentStoreId: string | null
 ) => {
+    const [syncStatus, setSyncStatus] = useState<'connecting' | 'online' | 'offline' | 'polling'>('connecting');
+    const lastFetchRef = useRef<number>(Date.now());
     const mapSaleFromSupabase = (s: any): SaleRecord => ({
         ...s,
         id: s.id,
@@ -34,6 +36,7 @@ export const useSupabaseSync = (
 
     const fetchData = async () => {
         if (!currentStoreId) return;
+        lastFetchRef.current = Date.now();
         console.log('🔄 Manually refreshing data from Supabase...');
 
         // Ventas
@@ -84,23 +87,25 @@ export const useSupabaseSync = (
         if (currentStoreId) fetchData();
     }, [currentStoreId]);
 
-    // 2. Suscripción Realtime (Solo para la tienda activa)
+    // 2. Suscripción Realtime + Polling Fallback
     useEffect(() => {
         if (!currentStoreId) return;
 
         let channel: any;
+        let pollingInterval: any;
 
         const subscribe = () => {
             if (channel) supabase.removeChannel(channel);
 
             channel = supabase
-                .channel(`store-${currentStoreId}-${Math.random().toString(36).substr(2, 5)}`)
+                .channel(`store-${currentStoreId}`)
                 .on('postgres_changes', {
                     event: '*',
                     schema: 'public',
                     table: 'sales',
                     filter: `store_id=eq.${currentStoreId}`
                 }, (payload) => {
+                    setSyncStatus('online');
                     if (payload.eventType === 'INSERT') {
                         const newSale = mapSaleFromSupabase(payload.new);
                         setReports(prev => {
@@ -120,6 +125,7 @@ export const useSupabaseSync = (
                     table: 'day_closures',
                     filter: `store_id=eq.${currentStoreId}`
                 }, (payload) => {
+                    setSyncStatus('online');
                     if (payload.eventType === 'INSERT') {
                         const newClosure = payload.new as DayClosure;
                         const mappedClosure: DayClosure = {
@@ -135,21 +141,29 @@ export const useSupabaseSync = (
                 })
                 .subscribe((status) => {
                     if (status === 'SUBSCRIBED') {
+                        setSyncStatus('online');
                         console.log('✅ Realtime Subscribed for:', currentStoreId);
                     }
                     if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
-                        console.warn('⚠️ Realtime Connection Lost. Retrying in 5s...');
-                        setTimeout(subscribe, 5000);
+                        setSyncStatus('polling');
+                        console.warn('⚠️ Realtime Connection Lost. Polling fallback active.');
+                        setTimeout(subscribe, 10000);
                     }
                 });
         };
 
         subscribe();
 
-        // Refrescar al recuperar foco u online (Puntual para móviles)
+        // POLL FALLBACK (Cada 15 segundos para móviles si el socket falla)
+        pollingInterval = setInterval(() => {
+            // Solo si no hemos recibido nada en los últimos 20 segundos
+            if (Date.now() - lastFetchRef.current > 15000) {
+                fetchData();
+            }
+        }, 15000);
+
         const handleAutoRefresh = () => {
             fetchData();
-            // Re-suscribir si cerró el socket por inactividad
             if (channel && channel.state === 'closed') subscribe();
         };
 
@@ -157,6 +171,7 @@ export const useSupabaseSync = (
         window.addEventListener('online', handleAutoRefresh);
 
         return () => {
+            clearInterval(pollingInterval);
             window.removeEventListener('focus', handleAutoRefresh);
             window.removeEventListener('online', handleAutoRefresh);
             if (channel) supabase.removeChannel(channel);
@@ -224,5 +239,5 @@ export const useSupabaseSync = (
         if (error) console.error('Error syncing closure:', error);
     };
 
-    return { syncSale, syncSettings, syncClosure, refreshData: fetchData };
+    return { syncSale, syncSettings, syncClosure, refreshData: fetchData, syncStatus };
 };
