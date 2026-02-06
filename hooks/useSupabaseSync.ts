@@ -10,48 +10,56 @@ export const useSupabaseSync = (
     dayClosures: DayClosure[],
     setDayClosures: (d: DayClosure[] | ((prev: DayClosure[]) => DayClosure[])) => void,
     menu: any[],
-    modifierGroups: any[]
+    modifierGroups: any[],
+    currentStoreId: string | null
 ) => {
-    // 1. Carga inicial
+    // 1. Carga inicial (Solo si hay un storeId activo)
     useEffect(() => {
+        if (!currentStoreId) return;
+
         const fetchData = async () => {
-            // Cargar Ventas
+            // Cargar Ventas de la tienda actual
             const { data: salesData } = await supabase
                 .from('sales')
                 .select('*')
+                .eq('store_id', currentStoreId)
                 .order('created_at', { ascending: false });
 
             if (salesData) {
                 setReports(salesData.map(s => ({
                     ...s,
+                    storeId: s.store_id,
                     order: s.order_data,
                     auditNotes: s.audit_notes
                 })));
             }
 
-            // Cargar Cierres
+            // Cargar Cierres de la tienda actual
             const { data: closuresData } = await supabase
                 .from('day_closures')
                 .select('*')
+                .eq('store_id', currentStoreId)
                 .order('closed_at', { ascending: false });
 
             if (closuresData) {
                 setDayClosures(closuresData.map(c => ({
                     ...c,
+                    storeId: c.store_id,
                     reportIds: c.report_ids
                 })));
             }
 
-            // Cargar Configuración (settings)
+            // Cargar Configuración (settings) de la tienda actual
             const { data: settingsData } = await supabase
                 .from('settings')
                 .select('*')
-                .eq('id', 'current_settings')
+                .eq('store_id', currentStoreId)
                 .single();
 
             if (settingsData) {
                 setSettings({
                     ...settingsData,
+                    storeId: settingsData.store_id,
                     kitchenStations: settingsData.kitchen_stations,
                     users: settingsData.users
                 });
@@ -59,18 +67,26 @@ export const useSupabaseSync = (
         };
 
         fetchData();
-    }, []);
+    }, [currentStoreId]);
 
-    // 2. Suscripción Realtime para Ventas (Crucial para KitchenScreen)
+    // 2. Suscripción Realtime (Solo para la tienda activa)
     useEffect(() => {
+        if (!currentStoreId) return;
+
         const channel = supabase
-            .channel('db-changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'sales' }, (payload) => {
+            .channel(`store-${currentStoreId}`)
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'sales',
+                filter: `store_id=eq.${currentStoreId}`
+            }, (payload) => {
                 if (payload.eventType === 'INSERT') {
                     const newSale = payload.new as any;
                     setReports(prev => [
                         {
                             ...newSale,
+                            storeId: newSale.store_id,
                             order: newSale.order_data,
                             auditNotes: newSale.audit_notes
                         },
@@ -80,6 +96,7 @@ export const useSupabaseSync = (
                     const updatedSale = payload.new as any;
                     setReports(prev => prev.map(r => r.id === updatedSale.id ? {
                         ...updatedSale,
+                        storeId: updatedSale.store_id,
                         order: updatedSale.order_data,
                         auditNotes: updatedSale.audit_notes
                     } : r));
@@ -92,12 +109,14 @@ export const useSupabaseSync = (
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [setReports]);
+    }, [currentStoreId, setReports]);
 
-    // 3. Funciones de Sincronización (para ser llamadas desde App.tsx)
+    // 3. Funciones de Sincronización
     const syncSale = async (sale: SaleRecord) => {
+        if (!currentStoreId) return;
         const { error } = await supabase.from('sales').upsert({
             id: sale.id,
+            store_id: currentStoreId,
             date: sale.date,
             time: sale.time,
             customer_name: sale.customerName,
@@ -115,9 +134,9 @@ export const useSupabaseSync = (
     };
 
     const syncSettings = async (newSettings: AppSettings) => {
+        if (!currentStoreId) return;
         const { error } = await supabase.from('settings').upsert({
-            id: 'current_settings',
-            store_id: newSettings.storeId,
+            store_id: currentStoreId,
             business_name: newSettings.businessName,
             business_logo: newSettings.businessLogo,
             total_tables: newSettings.totalTables,
@@ -136,8 +155,10 @@ export const useSupabaseSync = (
     };
 
     const syncClosure = async (closure: DayClosure) => {
+        if (!currentStoreId) return;
         const { error } = await supabase.from('day_closures').insert({
             id: closure.id,
+            store_id: currentStoreId,
             date: closure.date,
             closed_at: closure.closedAt,
             closed_by: closure.closedBy,

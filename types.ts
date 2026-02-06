@@ -179,6 +179,7 @@ export interface AuditEntry {
 
 export interface SaleRecord {
   id: string;
+  storeId: string;
   date: string;
   time: string;
   tableNumber: number;
@@ -235,6 +236,7 @@ export interface KitchenStation {
 // Registro de cierre de caja/turno
 export interface DayClosure {
   id: string;
+  storeId: string;
   date: string;
   closedAt: string; // ISO timestamp del momento del cierre
   closedBy: string; // Nombre del usuario que cerró

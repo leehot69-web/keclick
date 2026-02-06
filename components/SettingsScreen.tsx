@@ -221,7 +221,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = (props) => {
         <div className="w-10"></div>
       </header>
 
-      <div className="flex-grow overflow-y-auto p-4 space-y-6">
+      <div className="flex-grow overflow-y-auto p-4 space-y-6 pb-32">
         <div className="bg-red-50 p-4 rounded-2xl border border-red-100 flex justify-between items-center">
           <div>
             <p className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-1">Sesión Activa</p>
@@ -391,16 +391,18 @@ const SettingsScreen: React.FC<SettingsScreenProps> = (props) => {
           <button onClick={() => onClearAllSalesData()} className="w-full py-4 text-red-600 font-bold bg-red-50 rounded-2xl border border-red-100 uppercase text-xs">Limpiar Historial de Ventas</button>
         </div>
 
-        <button
-          onClick={handleSave}
-          disabled={!isDirty}
-          className={`w-full py-5 font-black rounded-2xl shadow-lg uppercase tracking-widest mt-4 transition-all ${isDirty
-            ? 'bg-red-600 text-white active:scale-95 shadow-red-200'
-            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-            }`}
-        >
-          Guardar Cambios
-        </button>
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 z-50">
+          <button
+            onClick={handleSave}
+            disabled={!isDirty}
+            className={`w-full max-w-4xl mx-auto py-5 font-black rounded-2xl shadow-lg uppercase tracking-widest transition-all block ${isDirty
+              ? 'bg-red-600 text-white active:scale-95 shadow-red-500/20'
+              : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+              }`}
+          >
+            Guardar Cambios
+          </button>
+        </div>
       </div>
 
       {priceIncreaseModalStore && (

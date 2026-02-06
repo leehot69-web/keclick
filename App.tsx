@@ -21,12 +21,14 @@ import PizzaBuilderModal from './components/PizzaBuilderModal';
 import LoginScreen from './components/LoginScreen';
 import AdminDashboard from './components/AdminDashboard';
 import KitchenScreen from './components/KitchenScreen';
+import RegistrationScreen from './components/RegistrationScreen';
+import { supabase } from './utils/supabase';
 
 function App() {
   // --- ESTADO PERSISTENTE ---
   const [menu, setMenu] = useLocalStorage<MenuCategory[]>('app_menu_v1', KECLICK_MENU_DATA);
   const [modifierGroups, setModifierGroups] = useLocalStorage<ModifierGroup[]>('app_modifiers_v1', KECLICK_MODIFIERS);
-  const [theme, setTheme] = useLocalStorage<ThemeName>('app_theme_v1', 'keclick');
+  const [theme, setTheme] = useLocalStorage<ThemeName>('app_theme_v1', 'red');
   const [businessName, setBusinessName] = useLocalStorage<string>('app_business_name_v1', 'Keclick');
   const [pizzaIngredients, setPizzaIngredients] = useLocalStorage<PizzaIngredient[]>('app_pizza_ingredients_v1', PIZZA_INGREDIENTS);
   const [pizzaBasePrices, setPizzaBasePrices] = useLocalStorage<Record<string, number>>('app_pizza_base_prices_v1', PIZZA_BASE_PRICES);
@@ -35,8 +37,8 @@ function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [removalReasons, setRemovalReasons] = useState<Record<string, string>>({});
 
-  const [settings, setSettings] = useLocalStorage<AppSettings>('app_settings_v1', {
-    storeId: `KC-${Math.random().toString(36).substr(2, 9).toUpperCase()}`, // Genera ID único como KC-A1B2C3
+  const [settings, setSettings] = useLocalStorage<AppSettings>('app_settings_v3', {
+    storeId: 'NEW_STORE',
     businessName: 'Keclick',
     businessLogo: 'https://i.ibb.co/9HxvMhx/keclick-logo.png',
     totalTables: 20,
@@ -44,12 +46,12 @@ function App() {
     exchangeRateBCV: 36.5,
     exchangeRateParallel: 40,
     activeExchangeRate: 'parallel',
-    isTrialActive: true,
+    isTrialActive: false,
     isLicenseActive: false,
-    trialStartDate: new Date().toISOString(),
+    trialStartDate: undefined,
     operationCount: 0,
     lifetimeRevenueUSD: 0,
-    targetNumber: '584120000000',
+    targetNumber: '',
     isWhatsAppEnabled: true,
     waitersCanCharge: true,
     kitchenStations: [
@@ -57,9 +59,7 @@ function App() {
     ],
     users: [
       { id: '1', name: 'Admin', pin: '0000', role: 'admin' },
-      { id: '2', name: 'Mesero 1', pin: '1234', role: 'mesero' },
-      { id: '3', name: 'Alejandro', pin: '1111', role: 'mesero' },
-      { id: '4', name: 'Cocina', pin: '9999', role: 'cocinero', kitchenStation: 'general' }
+      { id: 'cook-default', name: 'Cocina', pin: '9999', role: 'cocinero', kitchenStation: 'general' }
     ]
   });
 
@@ -144,6 +144,49 @@ function App() {
   const [isConfirmOrderModalOpen, setConfirmOrderModalOpen] = useState(false);
   const [pendingVoidReportId, setPendingVoidReportId] = useState<string | null>(null);
 
+  const handleRegister = async (businessNameInput: string, phone: string) => {
+    const newStoreId = `KC-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+    const now = new Date();
+
+    const newSettings: AppSettings = {
+      ...settings,
+      storeId: newStoreId,
+      businessName: businessNameInput,
+      targetNumber: phone,
+      isTrialActive: true,
+      trialStartDate: now.toISOString(),
+      isLicenseActive: false,
+      operationCount: 0,
+      lifetimeRevenueUSD: 0
+    };
+
+    setSettings(newSettings);
+    setBusinessName(businessNameInput);
+
+    // Notificar a Supabase la creación de la tienda
+    await supabase.from('stores').insert({
+      id: newStoreId,
+      name: businessNameInput,
+      owner_phone: phone,
+      status: 'trial',
+      trial_ends_at: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000).toISOString()
+    });
+
+    // Guardar settings iniciales
+    const { error } = await supabase.from('settings').insert({
+      store_id: newStoreId,
+      business_name: businessNameInput,
+      target_number: phone,
+      is_whatsapp_enabled: true,
+      kitchen_stations: settings.kitchenStations,
+      users: settings.users
+    });
+
+    if (error) console.error("Error al registrar tienda:", error);
+
+    setCurrentView('menu');
+  };
+
   // --- ESCUCHA DE SUPABASE ---
   const { syncSale, syncSettings, syncClosure } = useSupabaseSync(
     settings,
@@ -153,7 +196,8 @@ function App() {
     dayClosures,
     setDayClosures,
     menu,
-    modifierGroups
+    modifierGroups,
+    settings.storeId === 'NEW_STORE' ? null : settings.storeId
   );
   const [isAdminAuthForClearCart, setIsAdminAuthForClearCart] = useState(false);
   const [pendingRemoveItemId, setPendingRemoveItemId] = useState<string | null>(null);
@@ -464,15 +508,6 @@ function App() {
     setPendingVoidReportId(null);
   };
 
-  const handleRegister = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const targetNumber = formData.get('targetNumber') as string;
-    if (targetNumber.trim()) {
-      setSettings(prev => ({ ...prev, targetNumber: targetNumber.replace(/\D/g, '') }));
-      setCurrentView('menu');
-    }
-  };
 
   const handleLogout = () => {
     setCurrentUser(null);
@@ -511,6 +546,7 @@ function App() {
       // Crear el registro de cierre
       const newClosure: DayClosure = {
         id: Math.random().toString(36).substr(2, 9),
+        storeId: settings.storeId,
         date: today,
         closedAt: new Date().toISOString(),
         closedBy: closerName,
@@ -713,6 +749,7 @@ function App() {
 
     const newReport: SaleRecord = {
       id: Math.random().toString(36).substr(2, 9),
+      storeId: settings.storeId,
       date: new Date().toISOString().split('T')[0],
       time: new Date().toLocaleTimeString(),
       tableNumber: parseInt(customerDetails.name) || 0,
@@ -836,31 +873,27 @@ function App() {
     }
   };
 
-  // --- BLOQUEO POR VENCIMIENTO ---
   if (isSubscriptionInactive) {
     const isActuallyExpired = settings.isLicenseActive && settings.licenseExpiryDate && new Date() > new Date(settings.licenseExpiryDate);
 
     return (
       <div className="fixed inset-0 z-[1000] bg-black flex flex-col items-center justify-center p-8 text-center bg-cover bg-center" style={{ backgroundImage: 'linear-gradient(rgba(0,0,0,0.95), rgba(0,0,0,0.98)), url(https://images.unsplash.com/photo-1543353071-087092ec393a?q=80&w=2070&auto=format&fit=crop)' }}>
         <div className="w-24 h-24 bg-[#111] rounded-3xl p-3 mx-auto mb-6 shadow-2xl border border-[#FF0000]/30 flex flex-col items-center justify-center">
-          <div className="text-2xl font-black uppercase tracking-tighter flex items-center">
-            <span className="text-[#FF0000]">Ke</span>
-            <span className="text-[#FFD700]">click</span>
-          </div>
+          <KeclickLogo size="text-2xl" />
         </div>
         <h2 className="text-3xl font-black text-white uppercase tracking-tight mb-2">
           {isActuallyExpired ? 'Suscripción Agotada' : 'Periodo de Prueba Vencido'}
         </h2>
         <p className="text-gray-400 text-sm mb-10 max-w-[280px]">
           {isActuallyExpired
-            ? `Tu plan profesional ha finalizado el ${new Date(settings.licenseExpiryDate!).toLocaleDateString()}. Renueva para seguir facturando.`
+            ? `Tu plan profesional ha finalizado. Renueva para seguir facturando.`
             : 'Tu periodo de cortesía de 5 días ha finalizado. Activa tu licencia para continuar con la gestión de tu negocio.'
           }
         </p>
 
         <div className="space-y-4 w-full max-w-xs">
           <button
-            onClick={() => window.open(`https://wa.me/584120000000?text=${encodeURIComponent(`Hola, mi sistema Keclick (${settings.businessName}) ha vencido. Deseo renovar mi suscripción.`)}`, '_blank')}
+            onClick={() => window.open(`https://wa.me/584120000000?text=${encodeURIComponent(`Hola, mi sistema Keclick (${settings.businessName}) ha vencido. Deseo activar mi plan.`)}`, '_blank')}
             className="w-full py-5 bg-[#FF0000] text-white font-black rounded-2xl uppercase tracking-widest shadow-xl shadow-red-900/20 active:scale-95 transition-all"
           >
             Solicitar Activación
@@ -881,6 +914,10 @@ function App() {
 
   if (!isAppReady) return <SplashScreen onEnter={() => setIsAppReady(true)} />;
 
+  if (settings.storeId === 'NEW_STORE') {
+    return <RegistrationScreen onRegister={handleRegister} />;
+  }
+
   if (!currentUser) {
     return (
       <LoginScreen
@@ -897,25 +934,6 @@ function App() {
     );
   }
 
-  if (!settings.targetNumber) {
-    return (
-      <div className="h-full w-full bg-black p-2 box-border">
-        <div className="h-full w-full bg-white rounded-[38px] flex flex-col relative overflow-hidden" style={{ backgroundColor: 'var(--page-bg-color)' }}>
-          <div className="h-full w-full flex flex-col items-center justify-center p-8 overflow-y-auto">
-            <div className="w-24 h-24 bg-white rounded-3xl flex items-center justify-center mb-10 shadow-[0_15px_40px_rgba(0,0,0,0.08)] border border-gray-100 p-2">
-              <img src={businessLogo} alt="Logo" className="w-full h-full object-contain" />
-            </div>
-            <h1 className="text-2xl font-black mb-1 uppercase text-center tracking-tight text-gray-800">{businessName}</h1>
-            <p className="text-gray-400 text-center mb-10 text-[11px] font-bold uppercase tracking-widest max-w-[280px]">Configura el número de WhatsApp de Cocina</p>
-            <form onSubmit={handleRegister} className="w-full space-y-5">
-              <input name="targetNumber" type="tel" required placeholder="WhatsApp Cocina (Ej: 58412...)" className="w-full p-5 bg-white border border-gray-400 text-black rounded-[22px] font-bold outline-none" />
-              <button type="submit" className="w-full py-5 bg-red-600 text-white font-black rounded-[22px] uppercase tracking-widest mt-4">Guardar y Continuar</button>
-            </form>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <>
@@ -979,7 +997,7 @@ function App() {
           )}
 
           {/* Notificación de Platos Listos (Existente - Verde) */}
-          {currentUser && currentUser.role === 'mesero' && hasReadyPlates && currentView !== 'kitchen' && (
+          {currentUser && (currentUser.role === 'mesero' || currentUser.role === 'admin') && hasReadyPlates && currentView !== 'kitchen' && (
             <div className="bg-green-600 text-white py-2 px-4 shadow-lg animate-in slide-in-from-top duration-500 z-[100] shrink-0 border-b border-green-700 flex items-center justify-between gap-3 overflow-hidden">
               <div className="flex items-center gap-2 shrink-0">
                 <span className="flex h-6 w-6 items-center justify-center bg-white text-green-600 rounded-full animate-bounce">
@@ -1020,6 +1038,33 @@ function App() {
             </div>
           )}
           {(() => {
+            if (settings.storeId === 'NEW_STORE') {
+              return <RegistrationScreen onRegister={handleRegister} />;
+            }
+
+            if (isSubscriptionInactive) {
+              return (
+                <div className="min-h-screen bg-black flex flex-col items-center justify-center p-8 text-center">
+                  <KeclickLogo size="text-6xl" />
+                  <div className="mt-8 bg-[#111] p-10 rounded-[3rem] border border-red-500/20 max-w-sm shadow-2xl">
+                    <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-4">PRUEBA VENCIDA</h2>
+                    <p className="text-gray-400 text-sm leading-relaxed mb-8">
+                      Tus 5 días de prueba han terminado. Para continuar usando **Keclick PRO**, contacta con soporte para activar tu licencia.
+                    </p>
+                    <button
+                      onClick={() => window.open(`https://wa.me/${settings.targetNumber || '584120000000'}?text=Hola, mi prueba de Keclick (${settings.storeId}) ha vencido. Deseo activar mi plan.`, '_blank')}
+                      className="w-full py-4 bg-[#FFD700] text-black font-black rounded-2xl uppercase tracking-widest active:scale-95 transition-transform"
+                    >
+                      Activar Ahora
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
             switch (currentView) {
               case 'menu': return <MenuScreen menu={menu} cart={cart} onAddItem={handleAddItem} onUpdateQuantity={handleUpdateQuantity} onRemoveItem={handleRemoveItem} onClearCart={handleClearCart} cartItemCount={cart.reduce((acc, item) => acc + item.quantity, 0)} onOpenModifierModal={setModifierModalItem} onOpenPizzaBuilder={setPizzaBuilderItem} onGoToCart={() => setCurrentView('cart')} businessName={businessName} businessLogo={businessLogo} triggerShake={triggerCartShake} showInstallButton={showInstallBtn} onInstallApp={handleInstallClick} activeRate={activeRate} isEditing={!!editingReportId} theme={theme} />;
               case 'cart': return <CartScreen cart={cart} onUpdateQuantity={handleUpdateQuantity} onRemoveItem={handleRemoveItem} onClearCart={handleClearCart} onBackToMenu={() => setCurrentView('menu')} onGoToCheckout={() => setCurrentView('checkout')} onEditItem={(id) => { const item = cart.find(i => i.id === id); if (item) { setEditingCartItemId(id); for (const cat of menu) { const original = cat.items.find(i => i.name === item.name); if (original) { setModifierModalItem(original); break; } } } }} activeRate={activeRate} isEditing={!!editingReportId} isAdmin={currentUser?.role === 'admin'} />;
