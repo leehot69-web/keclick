@@ -104,17 +104,28 @@ export const useSupabaseSync = (
                     schema: 'public',
                     table: 'sales',
                     filter: `store_id=eq.${currentStoreId}`
-                }, (payload) => {
+                }, async (payload) => {
                     setSyncStatus('online');
-                    if (payload.eventType === 'INSERT') {
-                        const newSale = mapSaleFromSupabase(payload.new);
-                        setReports(prev => {
-                            if (prev.some(r => r.id === newSale.id)) return prev;
-                            return [newSale, ...prev];
-                        });
-                    } else if (payload.eventType === 'UPDATE') {
-                        const updatedSale = mapSaleFromSupabase(payload.new);
-                        setReports(prev => prev.map(r => r.id === updatedSale.id ? updatedSale : r));
+
+                    if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+                        // TÉCNICA JUAN-CHAT: Re-fetch del registro completo para evitar datos parciales
+                        const { data, error } = await supabase
+                            .from('sales')
+                            .select('*')
+                            .eq('id', payload.new.id)
+                            .single();
+
+                        if (!error && data) {
+                            const fullSale = mapSaleFromSupabase(data);
+                            setReports(prev => {
+                                if (payload.eventType === 'INSERT') {
+                                    if (prev.some(r => r.id === fullSale.id)) return prev;
+                                    return [fullSale, ...prev];
+                                } else {
+                                    return prev.map(r => r.id === fullSale.id ? fullSale : r);
+                                }
+                            });
+                        }
                     } else if (payload.eventType === 'DELETE') {
                         setReports(prev => prev.filter(r => r.id !== payload.old.id));
                     }
