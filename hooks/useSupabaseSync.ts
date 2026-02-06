@@ -32,55 +32,56 @@ export const useSupabaseSync = (
         createdAt: s.created_at
     });
 
-    // 1. Carga inicial (Solo si hay un storeId activo)
-    useEffect(() => {
+    const fetchData = async () => {
         if (!currentStoreId) return;
+        console.log('🔄 Manually refreshing data from Supabase...');
 
-        const fetchData = async () => {
-            // Cargar Ventas de la tienda actual
-            const { data: salesData } = await supabase
-                .from('sales')
-                .select('*')
-                .eq('store_id', currentStoreId)
-                .order('created_at', { ascending: false });
+        // Ventas
+        const { data: salesData } = await supabase
+            .from('sales')
+            .select('*')
+            .eq('store_id', currentStoreId)
+            .order('created_at', { ascending: false });
 
-            if (salesData) {
-                setReports(salesData.map(mapSaleFromSupabase));
-            }
+        if (salesData) {
+            setReports(salesData.map(mapSaleFromSupabase));
+        }
 
-            // Cargar Cierres de la tienda actual
-            const { data: closuresData } = await supabase
-                .from('day_closures')
-                .select('*')
-                .eq('store_id', currentStoreId)
-                .order('closed_at', { ascending: false });
+        // Cierres
+        const { data: closuresData } = await supabase
+            .from('day_closures')
+            .select('*')
+            .eq('store_id', currentStoreId)
+            .order('closed_at', { ascending: false });
 
-            if (closuresData) {
-                setDayClosures(closuresData.map(c => ({
-                    ...c,
-                    storeId: c.store_id,
-                    reportIds: c.report_ids
-                })));
-            }
+        if (closuresData) {
+            setDayClosures(closuresData.map(c => ({
+                ...c,
+                storeId: c.store_id,
+                reportIds: c.report_ids
+            })));
+        }
 
-            // Cargar Configuración (settings) de la tienda actual
-            const { data: settingsData } = await supabase
-                .from('settings')
-                .select('*')
-                .eq('store_id', currentStoreId)
-                .single();
+        // Settings (Solo si es necesario, pero usualmente si para sincronizar usuarios)
+        const { data: settingsData } = await supabase
+            .from('settings')
+            .select('*')
+            .eq('store_id', currentStoreId)
+            .single();
 
-            if (settingsData) {
-                setSettings({
-                    ...settingsData,
-                    storeId: settingsData.store_id,
-                    kitchenStations: settingsData.kitchen_stations,
-                    users: settingsData.users
-                });
-            }
-        };
+        if (settingsData) {
+            setSettings({
+                ...settingsData,
+                storeId: settingsData.store_id,
+                kitchenStations: settingsData.kitchen_stations,
+                users: settingsData.users
+            });
+        }
+    };
 
-        fetchData();
+    // 1. Carga inicial
+    useEffect(() => {
+        if (currentStoreId) fetchData();
     }, [currentStoreId]);
 
     // 2. Suscripción Realtime (Solo para la tienda activa)
@@ -88,7 +89,7 @@ export const useSupabaseSync = (
         if (!currentStoreId) return;
 
         const channel = supabase
-            .channel(`store-${currentStoreId}`)
+            .channel(`store-${currentStoreId}-${Math.random().toString(36).substr(2, 5)}`)
             .on('postgres_changes', {
                 event: '*',
                 schema: 'public',
@@ -116,18 +117,30 @@ export const useSupabaseSync = (
             }, (payload) => {
                 if (payload.eventType === 'INSERT') {
                     const newClosure = payload.new as DayClosure;
+                    const mappedClosure: DayClosure = {
+                        ...newClosure,
+                        storeId: (newClosure as any).store_id,
+                        reportIds: (newClosure as any).report_ids
+                    };
                     setDayClosures(prev => {
-                        if (prev.some(c => c.id === newClosure.id)) return prev;
-                        return [newClosure, ...prev];
+                        if (prev.some(c => c.id === mappedClosure.id)) return prev;
+                        return [mappedClosure, ...prev];
                     });
                 }
             })
-            .subscribe();
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    console.log('✅ Realtime Subscribed for:', currentStoreId);
+                }
+                if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
+                    console.warn('⚠️ Realtime Connection Lost. Status:', status);
+                }
+            });
 
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [currentStoreId, setReports]);
+    }, [currentStoreId, setReports, setDayClosures]);
 
     // 3. Funciones de Sincronización
     const syncSale = async (sale: SaleRecord) => {
@@ -190,5 +203,5 @@ export const useSupabaseSync = (
         if (error) console.error('Error syncing closure:', error);
     };
 
-    return { syncSale, syncSettings, syncClosure };
+    return { syncSale, syncSettings, syncClosure, refreshData: fetchData };
 };
