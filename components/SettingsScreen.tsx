@@ -27,6 +27,7 @@ interface SettingsScreenProps {
   pizzaIngredients: PizzaIngredient[];
   pizzaBasePrices: Record<string, number>;
   onUpdatePizzaConfig: (ingredients: PizzaIngredient[], basePrices: Record<string, number>) => void;
+  onResetApp?: () => void;
 }
 
 const StoreProfileEditor: React.FC<{
@@ -132,7 +133,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = (props) => {
     settings, onSaveSettings, onGoToTables, waiter, onLogout,
     storeProfiles, onUpdateStoreProfiles, onClearAllSalesData,
     isPrinterConnected, printerName, onConnectPrinter, onDisconnectPrinter, onPrintTest,
-    pizzaIngredients, pizzaBasePrices, onUpdatePizzaConfig
+    pizzaIngredients, pizzaBasePrices, onUpdatePizzaConfig, onResetApp
   } = props;
 
   const [localSettings, setLocalSettings] = useState(settings);
@@ -221,7 +222,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = (props) => {
         <div className="w-10"></div>
       </header>
 
-      <div className="flex-grow overflow-y-auto p-4 space-y-6 pb-32">
+      <div className="flex-grow overflow-y-auto p-4 space-y-6">
         <div className="bg-red-50 p-4 rounded-2xl border border-red-100 flex justify-between items-center">
           <div>
             <p className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-1">Sesión Activa</p>
@@ -382,26 +383,43 @@ const SettingsScreen: React.FC<SettingsScreenProps> = (props) => {
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
             Gestionar Usuarios
           </button>
+
+          {onResetApp && (
+            <button
+              onClick={onResetApp}
+              className="w-full py-4 text-white font-black bg-red-600 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest active:scale-95 transition-all"
+            >
+              🚀 CAMBIAR DE NEGOCIO (DESCONECTAR)
+            </button>
+          )}
+
           <button onClick={() => setStationModalOpen(true)} className="w-full py-4 text-emerald-600 font-bold bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-center gap-2 uppercase text-xs">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
             Estaciones de Cocina
           </button>
-          <button onClick={() => onClearAllSalesData()} className="w-full py-4 text-red-600 font-bold bg-red-50 rounded-2xl border border-red-100 uppercase text-xs">Limpiar Historial de Ventas</button>
+
+          <div className="pt-4 mt-4 border-t border-gray-100 italic text-[10px] text-gray-400 text-center uppercase tracking-widest pb-4">
+            Keclick Software v2.0
+          </div>
         </div>
 
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 z-50">
+        {/* BOTÓN DE GUARDAR: AHORA DENTRO DEL SCROLL PARA QUE NO TAPE NADA */}
+        <div className="pt-6 pb-20">
           <button
             onClick={handleSave}
             disabled={!isDirty}
-            className={`w-full max-w-4xl mx-auto py-5 font-black rounded-2xl shadow-lg uppercase tracking-widest transition-all block ${isDirty
-              ? 'bg-red-600 text-white active:scale-95 shadow-red-500/20'
-              : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+            className={`w-full py-5 font-black rounded-3xl shadow-2xl uppercase tracking-[0.2em] transition-all transform active:scale-95 ${isDirty
+              ? 'bg-[#FF0000] text-white shadow-red-500/20'
+              : 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
               }`}
           >
-            Guardar Cambios
+            {isDirty ? '✓ Guardar Cambios' : 'Sin Cambios'}
           </button>
+          <p className="text-center text-[10px] text-gray-400 mt-6 uppercase font-bold tracking-widest opacity-30">
+            ID de Tienda: {settings.storeId}
+          </p>
         </div>
       </div>
 

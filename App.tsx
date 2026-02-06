@@ -144,6 +144,49 @@ function App() {
   const [isConfirmOrderModalOpen, setConfirmOrderModalOpen] = useState(false);
   const [pendingVoidReportId, setPendingVoidReportId] = useState<string | null>(null);
 
+  const handleJoin = async (storeId: string) => {
+    // Verificar si la tienda existe en Supabase
+    const { data: storeData, error: storeError } = await supabase
+      .from('stores')
+      .select('*')
+      .eq('id', storeId)
+      .single();
+
+    if (storeError || !storeData) {
+      return false;
+    }
+
+    // Cargar también sus settings
+    const { data: settingsData, error: settingsError } = await supabase
+      .from('settings')
+      .select('*')
+      .eq('store_id', storeId)
+      .single();
+
+    if (settingsError || !settingsData) {
+      return false;
+    }
+
+    // Si existe, actualizar settings locales con los datos de la nube
+    const updatedSettings: AppSettings = {
+      ...settings,
+      storeId: storeData.id,
+      businessName: storeData.name,
+      targetNumber: settingsData.target_number,
+      isTrialActive: settingsData.is_trial_active,
+      trialStartDate: settingsData.trial_start_date,
+      isLicenseActive: settingsData.is_license_active,
+      licenseExpiryDate: settingsData.license_expiry_date,
+      kitchenStations: settingsData.kitchen_stations || settings.kitchenStations,
+      users: settingsData.users || settings.users
+    };
+
+    setSettings(updatedSettings);
+    setBusinessName(storeData.name);
+    setCurrentView('menu');
+    return true;
+  };
+
   const handleRegister = async (businessNameInput: string, phone: string) => {
     const newStoreId = `KC-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
     const now = new Date();
@@ -1039,7 +1082,7 @@ function App() {
           )}
           {(() => {
             if (settings.storeId === 'NEW_STORE') {
-              return <RegistrationScreen onRegister={handleRegister} />;
+              return <RegistrationScreen onRegister={handleRegister} onJoin={handleJoin} />;
             }
 
             if (isSubscriptionInactive) {
@@ -1110,6 +1153,12 @@ function App() {
                   onUpdatePizzaConfig={(ingredients, basePrices) => {
                     setPizzaIngredients(ingredients);
                     setPizzaBasePrices(basePrices);
+                  }}
+                  onResetApp={() => {
+                    if (window.confirm("¿Seguro que quieres cerrar este negocio en este dispositivo? Tendrás que usar un código para volver a entrar.")) {
+                      setSettings(prev => ({ ...prev, storeId: 'NEW_STORE' }));
+                      setCurrentView('menu');
+                    }
                   }}
                 />;
               }

@@ -2,73 +2,138 @@ import React, { useState } from 'react';
 
 interface RegistrationScreenProps {
     onRegister: (businessName: string, phone: string) => void;
+    onJoin: (storeId: string) => Promise<boolean>;
 }
 
-const RegistrationScreen: React.FC<RegistrationScreenProps> = ({ onRegister }) => {
+const RegistrationScreen: React.FC<RegistrationScreenProps> = ({ onRegister, onJoin }) => {
+    const [mode, setMode] = useState<'register' | 'join'>('register');
     const [name, setName] = useState('');
     const [phone, setPhone] = useState('');
+    const [joinId, setJoinId] = useState('');
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!name || !phone) return;
         setLoading(true);
-        setTimeout(() => {
-            onRegister(name, phone);
+        setError('');
+
+        try {
+            if (mode === 'register') {
+                if (!name || !phone) throw new Error('Completa todos los campos');
+                onRegister(name, phone);
+            } else {
+                if (!joinId) throw new Error('Ingresa un código de tienda');
+                const success = await onJoin(joinId.toUpperCase());
+                if (!success) throw new Error('Código de tienda no encontrado');
+            }
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
             setLoading(false);
-        }, 1500);
+        }
     };
 
     return (
-        <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-white font-sans">
-            <div className="w-full max-w-md space-y-8 animate-fadeIn">
+        <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-white font-sans overflow-hidden">
+            <div className="w-full max-w-md space-y-8 animate-in fade-in zoom-in duration-500">
                 <div className="text-center">
-                    <div className="text-5xl font-black uppercase tracking-tighter italic mb-2">
+                    <div className="text-6xl font-black uppercase tracking-tighter italic mb-4">
                         <span className="text-[#FF0000]">Ke</span>
                         <span className="text-[#FFD700]">click</span>
                     </div>
-                    <h2 className="text-2xl font-bold tracking-tight">Bienvenido a la Plataforma</h2>
-                    <p className="text-gray-400 mt-2">Registra tu negocio y obtén 5 días de prueba gratis.</p>
+                    <div className="inline-flex bg-white/5 p-1 rounded-2xl mb-8">
+                        <button
+                            type="button"
+                            onClick={() => setMode('register')}
+                            className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${mode === 'register' ? 'bg-[#FF0000] text-white' : 'text-gray-400 hover:text-white'}`}
+                        >
+                            Nuevo Negocio
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setMode('join')}
+                            className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${mode === 'join' ? 'bg-[#FF0000] text-white' : 'text-gray-400 hover:text-white'}`}
+                        >
+                            Tengo un Código
+                        </button>
+                    </div>
                 </div>
 
-                <form onSubmit={handleSubmit} className="mt-8 space-y-6 bg-[#111] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl">
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-xs font-black uppercase tracking-widest text-[#FFD700] mb-2">Nombre del Negocio</label>
-                            <input
-                                required
-                                type="text"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                placeholder="Ej: Pizzería La Toscana"
-                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-white placeholder-gray-600 focus:outline-none focus:border-[#FF0000] focus:ring-1 focus:ring-[#FF0000] transition-all"
-                            />
+                <form onSubmit={handleSubmit} className="bg-[#111] p-10 rounded-[3rem] border border-white/5 shadow-[0_50px_100px_rgba(0,0,0,0.5)] relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#FF0000] to-transparent"></div>
+
+                    {error && (
+                        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-500 text-sm font-bold text-center">
+                            {error}
                         </div>
-                        <div>
-                            <label className="block text-xs font-black uppercase tracking-widest text-[#FFD700] mb-2">WhatsApp de Contacto</label>
-                            <input
-                                required
-                                type="tel"
-                                value={phone}
-                                onChange={(e) => setPhone(e.target.value)}
-                                placeholder="Ej: 584120000000"
-                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-white placeholder-gray-600 focus:outline-none focus:border-[#FF0000] focus:ring-1 focus:ring-[#FF0000] transition-all"
-                            />
-                        </div>
+                    )}
+
+                    <div className="space-y-6">
+                        {mode === 'register' ? (
+                            <>
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-[#FFD700] mb-3">Nombre del Negocio</label>
+                                    <input
+                                        required
+                                        type="text"
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                        placeholder="EJ: PIZZERÍA LA TOSCANA"
+                                        className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-white placeholder-gray-700 focus:outline-none focus:border-[#FF0000] focus:ring-1 focus:ring-[#FF0000] transition-all uppercase font-bold"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-[#FFD700] mb-3">WhatsApp de Contacto</label>
+                                    <input
+                                        required
+                                        type="tel"
+                                        value={phone}
+                                        onChange={(e) => setPhone(e.target.value)}
+                                        placeholder="EJ: 584120000000"
+                                        className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-white placeholder-gray-700 focus:outline-none focus:border-[#FF0000] focus:ring-1 focus:ring-[#FF0000] transition-all font-bold"
+                                    />
+                                </div>
+                            </>
+                        ) : (
+                            <div>
+                                <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-[#FFD700] mb-3">Código de Tienda (ID)</label>
+                                <input
+                                    required
+                                    type="text"
+                                    value={joinId}
+                                    onChange={(e) => setJoinId(e.target.value)}
+                                    placeholder="EJ: KC-AX42Y"
+                                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-5 px-6 text-white placeholder-gray-700 focus:outline-none focus:border-[#FF0000] focus:ring-1 focus:ring-[#FF0000] transition-all text-center text-3xl font-black tracking-widest uppercase"
+                                />
+                                <p className="text-[10px] text-gray-500 mt-4 text-center leading-relaxed">
+                                    Encuentra este código en la sección de <strong className="text-gray-300">Ajustes</strong> del dispositivo principal.
+                                </p>
+                            </div>
+                        )}
                     </div>
 
                     <button
                         disabled={loading}
                         type="submit"
-                        className={`w-full py-5 rounded-[1.5rem] font-black uppercase tracking-widest text-lg transition-all transform active:scale-95 shadow-xl ${loading ? 'bg-gray-700' : 'bg-[#FF0000] text-white hover:bg-[#CC0000] shadow-[0_15px_40px_rgba(255,0,0,0.2)]'}`}
+                        className={`mt-10 w-full py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-sm transition-all transform active:scale-95 shadow-2xl flex items-center justify-center gap-3 ${loading ? 'bg-gray-800 text-gray-500' : 'bg-[#FF0000] text-white hover:bg-[#CC0000] shadow-[0_20px_50px_rgba(255,0,0,0.3)]'}`}
                     >
-                        {loading ? 'Procesando...' : 'Empezar Prueba Gratis'}
+                        {loading ? (
+                            <>
+                                <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                                <span>CONECTANDO...</span>
+                            </>
+                        ) : (
+                            <span>{mode === 'register' ? 'CREAR NEGOCIO' : 'CONECTAR TIENDA'}</span>
+                        )}
                     </button>
                 </form>
 
-                <p className="text-center text-gray-500 text-[10px] uppercase font-bold tracking-[0.2em]">
-                    Control Total • Gestión PRO • Multi-Estación
-                </p>
+                <div className="flex items-center justify-center gap-8 grayscale opacity-20 hover:grayscale-0 hover:opacity-100 transition-all duration-700">
+                    <div className="text-[8px] font-black uppercase tracking-widest">REALTIME SYNC</div>
+                    <div className="text-[8px] font-black uppercase tracking-widest">MULTI-DEVICE</div>
+                    <div className="text-[8px] font-black uppercase tracking-widest">CLOUD POS</div>
+                </div>
             </div>
         </div>
     );
