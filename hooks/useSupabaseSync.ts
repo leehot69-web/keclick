@@ -154,13 +154,12 @@ export const useSupabaseSync = (
 
         subscribe();
 
-        // POLL FALLBACK (Cada 15 segundos para móviles si el socket falla)
+        // POLL FALLBACK (Cada 10 segundos para móviles como respaldo total)
         pollingInterval = setInterval(() => {
-            // Solo si no hemos recibido nada en los últimos 20 segundos
-            if (Date.now() - lastFetchRef.current > 15000) {
+            if (syncStatus !== 'online' || (Date.now() - lastFetchRef.current > 30000)) {
                 fetchData();
             }
-        }, 15000);
+        }, 10000);
 
         const handleAutoRefresh = () => {
             fetchData();
@@ -169,11 +168,15 @@ export const useSupabaseSync = (
 
         window.addEventListener('focus', handleAutoRefresh);
         window.addEventListener('online', handleAutoRefresh);
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') handleAutoRefresh();
+        });
 
         return () => {
             clearInterval(pollingInterval);
             window.removeEventListener('focus', handleAutoRefresh);
             window.removeEventListener('online', handleAutoRefresh);
+            document.removeEventListener('visibilitychange', handleAutoRefresh);
             if (channel) supabase.removeChannel(channel);
         };
     }, [currentStoreId, setReports, setDayClosures]);
