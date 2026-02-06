@@ -94,6 +94,58 @@ export const useSupabaseSync = (
         let channel: any;
         let pollingInterval: any;
 
+        const fetchData = async () => {
+            if (!currentStoreId) return;
+            lastFetchRef.current = Date.now();
+            console.log('🔄 Sincronizando datos (Heartbeat/Manual)...');
+
+            try {
+                // Ventas
+                const { data: salesData } = await supabase
+                    .from('sales')
+                    .select('*')
+                    .eq('store_id', currentStoreId)
+                    .order('created_at', { ascending: false });
+
+                if (salesData) {
+                    setReports(salesData.map(mapSaleFromSupabase));
+                }
+
+                // Cierres
+                const { data: closuresData } = await supabase
+                    .from('day_closures')
+                    .select('*')
+                    .eq('store_id', currentStoreId)
+                    .order('closed_at', { ascending: false });
+
+                if (closuresData) {
+                    setDayClosures(closuresData.map(c => ({
+                        ...c,
+                        storeId: c.store_id,
+                        reportIds: c.report_ids
+                    })));
+                }
+
+                // Settings
+                const { data: settingsData } = await supabase
+                    .from('settings')
+                    .select('*')
+                    .eq('store_id', currentStoreId)
+                    .single();
+
+                if (settingsData) {
+                    setSettings({
+                        ...settingsData,
+                        storeId: settingsData.store_id,
+                        kitchenStations: settingsData.kitchen_stations,
+                        users: settingsData.users
+                    });
+                }
+            } catch (err) {
+                console.error("Error en fetchData:", err);
+            }
+        };
+
         const subscribe = () => {
             if (channel) supabase.removeChannel(channel);
 
@@ -106,9 +158,10 @@ export const useSupabaseSync = (
                     filter: `store_id=eq.${currentStoreId}`
                 }, async (payload) => {
                     setSyncStatus('online');
+                    lastFetchRef.current = Date.now(); // Actualizar pulso
 
                     if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-                        // TÉCNICA JUAN-CHAT: Re-fetch del registro completo para evitar datos parciales
+                        // TÉCNICA JUAN-CHAT: Re-fetch del registro completo
                         const { data, error } = await supabase
                             .from('sales')
                             .select('*')
@@ -137,6 +190,7 @@ export const useSupabaseSync = (
                     filter: `store_id=eq.${currentStoreId}`
                 }, (payload) => {
                     setSyncStatus('online');
+                    lastFetchRef.current = Date.now();
                     if (payload.eventType === 'INSERT') {
                         const newClosure = payload.new as DayClosure;
                         const mappedClosure: DayClosure = {
@@ -153,41 +207,47 @@ export const useSupabaseSync = (
                 .subscribe((status) => {
                     if (status === 'SUBSCRIBED') {
                         setSyncStatus('online');
-                        console.log('✅ Realtime Subscribed for:', currentStoreId);
+                        console.log('✅ Realtime Activo:', currentStoreId);
                     }
                     if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
                         setSyncStatus('polling');
-                        console.warn('⚠️ Realtime Connection Lost. Polling fallback active.');
-                        setTimeout(subscribe, 10000);
+                        console.warn('⚠️ Conexión Realtime caída. Plan de respaldo activo.');
                     }
                 });
         };
 
         subscribe();
 
-        // POLL FALLBACK (Cada 10 segundos para móviles como respaldo total)
+        // POLL FALLBACK ULTRAAGRESIVO (Cada 10 segundos SIEMPRE)
         pollingInterval = setInterval(() => {
-            if (syncStatus !== 'online' || (Date.now() - lastFetchRef.current > 30000)) {
+            // Si han pasado más de 12 segundos sin novedades, forzar descarga
+            if (Date.now() - lastFetchRef.current > 12000) {
                 fetchData();
             }
         }, 10000);
 
         const handleAutoRefresh = () => {
+            console.log('📱 Despertando App - Refrescando todo...');
             fetchData();
-            if (channel && channel.state === 'closed') subscribe();
+            // Forzar actualización de suscripción por si el navegador mató el WebSocket
+            subscribe();
         };
 
         window.addEventListener('focus', handleAutoRefresh);
         window.addEventListener('online', handleAutoRefresh);
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') handleAutoRefresh();
-        });
+
+        const visibilityHandler = () => {
+            if (document.visibilityState === 'visible') {
+                handleAutoRefresh();
+            }
+        };
+        document.addEventListener('visibilitychange', visibilityHandler);
 
         return () => {
             clearInterval(pollingInterval);
             window.removeEventListener('focus', handleAutoRefresh);
             window.removeEventListener('online', handleAutoRefresh);
-            document.removeEventListener('visibilitychange', handleAutoRefresh);
+            document.removeEventListener('visibilitychange', visibilityHandler);
             if (channel) supabase.removeChannel(channel);
         };
     }, [currentStoreId, setReports, setDayClosures]);
