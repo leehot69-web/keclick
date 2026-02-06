@@ -402,7 +402,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = (props) => {
 
           {/* Acceso a KeMaster para Administradores */}
           <button
-            onClick={() => window.open('/kemaster.html', '_blank')}
+            onClick={() => window.open('/kemaster', '_blank')}
             className="w-full py-4 text-amber-700 font-bold bg-amber-50 rounded-2xl border border-amber-200 flex items-center justify-center gap-2 uppercase text-[10px] tracking-[0.2em] shadow-sm active:scale-95 transition-all"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

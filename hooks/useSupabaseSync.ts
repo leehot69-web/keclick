@@ -88,57 +88,78 @@ export const useSupabaseSync = (
     useEffect(() => {
         if (!currentStoreId) return;
 
-        const channel = supabase
-            .channel(`store-${currentStoreId}-${Math.random().toString(36).substr(2, 5)}`)
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'sales',
-                filter: `store_id=eq.${currentStoreId}`
-            }, (payload) => {
-                if (payload.eventType === 'INSERT') {
-                    const newSale = mapSaleFromSupabase(payload.new);
-                    setReports(prev => {
-                        if (prev.some(r => r.id === newSale.id)) return prev;
-                        return [newSale, ...prev];
-                    });
-                } else if (payload.eventType === 'UPDATE') {
-                    const updatedSale = mapSaleFromSupabase(payload.new);
-                    setReports(prev => prev.map(r => r.id === updatedSale.id ? updatedSale : r));
-                } else if (payload.eventType === 'DELETE') {
-                    setReports(prev => prev.filter(r => r.id !== payload.old.id));
-                }
-            })
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'day_closures',
-                filter: `store_id=eq.${currentStoreId}`
-            }, (payload) => {
-                if (payload.eventType === 'INSERT') {
-                    const newClosure = payload.new as DayClosure;
-                    const mappedClosure: DayClosure = {
-                        ...newClosure,
-                        storeId: (newClosure as any).store_id,
-                        reportIds: (newClosure as any).report_ids
-                    };
-                    setDayClosures(prev => {
-                        if (prev.some(c => c.id === mappedClosure.id)) return prev;
-                        return [mappedClosure, ...prev];
-                    });
-                }
-            })
-            .subscribe((status) => {
-                if (status === 'SUBSCRIBED') {
-                    console.log('✅ Realtime Subscribed for:', currentStoreId);
-                }
-                if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
-                    console.warn('⚠️ Realtime Connection Lost. Status:', status);
-                }
-            });
+        let channel: any;
+
+        const subscribe = () => {
+            if (channel) supabase.removeChannel(channel);
+
+            channel = supabase
+                .channel(`store-${currentStoreId}-${Math.random().toString(36).substr(2, 5)}`)
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'sales',
+                    filter: `store_id=eq.${currentStoreId}`
+                }, (payload) => {
+                    if (payload.eventType === 'INSERT') {
+                        const newSale = mapSaleFromSupabase(payload.new);
+                        setReports(prev => {
+                            if (prev.some(r => r.id === newSale.id)) return prev;
+                            return [newSale, ...prev];
+                        });
+                    } else if (payload.eventType === 'UPDATE') {
+                        const updatedSale = mapSaleFromSupabase(payload.new);
+                        setReports(prev => prev.map(r => r.id === updatedSale.id ? updatedSale : r));
+                    } else if (payload.eventType === 'DELETE') {
+                        setReports(prev => prev.filter(r => r.id !== payload.old.id));
+                    }
+                })
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'day_closures',
+                    filter: `store_id=eq.${currentStoreId}`
+                }, (payload) => {
+                    if (payload.eventType === 'INSERT') {
+                        const newClosure = payload.new as DayClosure;
+                        const mappedClosure: DayClosure = {
+                            ...newClosure,
+                            storeId: (newClosure as any).store_id,
+                            reportIds: (newClosure as any).report_ids
+                        };
+                        setDayClosures(prev => {
+                            if (prev.some(c => c.id === mappedClosure.id)) return prev;
+                            return [mappedClosure, ...prev];
+                        });
+                    }
+                })
+                .subscribe((status) => {
+                    if (status === 'SUBSCRIBED') {
+                        console.log('✅ Realtime Subscribed for:', currentStoreId);
+                    }
+                    if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
+                        console.warn('⚠️ Realtime Connection Lost. Retrying in 5s...');
+                        setTimeout(subscribe, 5000);
+                    }
+                });
+        };
+
+        subscribe();
+
+        // Refrescar al recuperar foco u online (Puntual para móviles)
+        const handleAutoRefresh = () => {
+            fetchData();
+            // Re-suscribir si cerró el socket por inactividad
+            if (channel && channel.state === 'closed') subscribe();
+        };
+
+        window.addEventListener('focus', handleAutoRefresh);
+        window.addEventListener('online', handleAutoRefresh);
 
         return () => {
-            supabase.removeChannel(channel);
+            window.removeEventListener('focus', handleAutoRefresh);
+            window.removeEventListener('online', handleAutoRefresh);
+            if (channel) supabase.removeChannel(channel);
         };
     }, [currentStoreId, setReports, setDayClosures]);
 
