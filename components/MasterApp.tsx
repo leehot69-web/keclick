@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import MenuManagementModal from './MenuManagementModal';
 import { MenuCategory, ModifierGroup, PizzaIngredient } from '../types';
 import { KECLICK_MENU_DATA, KECLICK_MODIFIERS, PIZZA_BASE_PRICES, PIZZA_INGREDIENTS } from '../constants';
+import { supabase } from '../utils/supabase';
 
 // --- ESTRUCTURA DE PLANES ---
 interface Plan {
@@ -66,97 +67,116 @@ const MasterApp: React.FC = () => {
 
     const activeExchangeRate = 50; // Mock rate for BS calculation
 
-    const [stores, setStores] = useState<ManagedStore[]>(() => {
-        const savedStores = localStorage.getItem('kemaster_stores_v2');
-        if (savedStores) return JSON.parse(savedStores);
+    const [stores, setStores] = useState<ManagedStore[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
-        return [
-            {
-                id: 'KC-772A',
-                name: 'Pizzería La Mía (Juan)',
-                ownerPhone: '584120001122',
-                status: 'active',
-                activationDate: '2025-01-01',
-                expiryDate: '2026-08-01',
-                lastPaymentAmount: 30,
-                totalSales: 4500.50,
-                notesHistory: [{ date: '2025-01-01', text: 'Inicio de operaciones. Buen cliente.' }],
+    const fetchStores = async () => {
+        setIsLoading(true);
+        console.log('🛰️ Radar KeMaster: Escaneando naves en Supabase...');
+
+        const { data: storesData, error: storesError } = await supabase
+            .from('stores')
+            .select('*, settings!inner(*)');
+
+        if (storesError) {
+            console.error('Error fetching stores:', storesError);
+            setIsLoading(false);
+            return;
+        }
+
+        // Obtener ventas totales resumidas por tienda
+        const { data: salesSum } = await supabase
+            .rpc('get_stores_sales_summary'); // Necesitaríamos este RPC o sumarlos manualmente
+
+        const mappedStores: ManagedStore[] = await Promise.all(storesData.map(async (s: any) => {
+            // Suma manual de ventas si no hay RPC
+            const { data: salesData } = await supabase
+                .from('sales')
+                .select('total')
+                .eq('store_id', s.id);
+
+            const totalSales = salesData?.reduce((acc, curr) => acc + (curr.total || 0), 0) || 0;
+
+            const st = s.settings || {};
+
+            return {
+                id: s.id,
+                name: s.name,
+                ownerPhone: s.owner_phone || '',
+                status: s.status as any,
+                activationDate: s.created_at?.split('T')[0] || '',
+                expiryDate: s.trial_ends_at?.split('T')[0] || '',
+                lastPaymentAmount: 0,
+                totalSales: totalSales,
+                notesHistory: [],
                 billingModel: 'subscription',
                 commissionRate: 0,
-                fixedFee: 30,
-                planName: 'Plan 1 Mes',
-                menu: KECLICK_MENU_DATA,
-                modifierGroups: KECLICK_MODIFIERS,
-                pizzaIngredients: PIZZA_INGREDIENTS,
-                pizzaBasePrices: PIZZA_BASE_PRICES
-            },
-            {
-                id: 'KC-BB99',
-                name: 'Hamburguesas King (Pedro)',
-                ownerPhone: '584125556677',
-                status: 'expired',
-                activationDate: '2024-12-10',
-                expiryDate: '2025-02-10',
-                lastPaymentAmount: 50,
-                totalSales: 890.20,
-                notesHistory: [{ date: '2024-12-10', text: 'Activación inicial modo híbrido.' }],
-                billingModel: 'hybrid',
-                commissionRate: 0.01,
-                fixedFee: 50,
-                planName: 'Plan 1 Mes',
-                menu: KECLICK_MENU_DATA,
-                modifierGroups: KECLICK_MODIFIERS,
-                pizzaIngredients: PIZZA_INGREDIENTS,
-                pizzaBasePrices: PIZZA_BASE_PRICES
-            }
-        ];
-    });
+                fixedFee: 0,
+                menu: st.menu || KECLICK_MENU_DATA,
+                modifierGroups: st.modifier_groups || KECLICK_MODIFIERS,
+                users: st.users || []
+            };
+        }));
+
+        setStores(mappedStores);
+        setIsLoading(false);
+    };
 
     useEffect(() => {
-        localStorage.setItem('kemaster_stores_v2', JSON.stringify(stores));
-    }, [stores]);
+        if (isAuthorized) {
+            fetchStores();
+        }
+    }, [isAuthorized]);
 
     const handleLogin = () => {
         if (pin === '1985') setIsAuthorized(true);
         else alert("Acceso Denegado 🛑");
     };
 
-    const toggleStatus = (storeId: string) => {
-        setStores(prev => prev.map(s => {
-            if (s.id === storeId) {
-                const newStatus = s.status === 'active' ? 'suspended' : 'active';
-                return { ...s, status: newStatus };
-            }
-            return s;
-        }));
+    const toggleStatus = async (storeId: string) => {
+        const store = stores.find(s => s.id === storeId);
+        if (!store) return;
+
+        const newStatus = store.status === 'active' ? 'suspended' : 'active';
+
+        const { error } = await supabase
+            .from('stores')
+            .update({ status: newStatus })
+            .eq('id', storeId);
+
+        if (!error) {
+            setStores(prev => prev.map(s => s.id === storeId ? { ...s, status: newStatus } : s));
+        } else {
+            alert("Error al cambiar status: " + error.message);
+        }
     };
 
-    const activatePlan = (plan: Plan, model: 'subscription' | 'commission' | 'hybrid', rate: number = 0, fixed: number = 0, payment: number = 0) => {
+    const activatePlan = async (plan: Plan, model: 'subscription' | 'commission' | 'hybrid', rate: number = 0, fixed: number = 0, payment: number = 0) => {
         if (!selectedStore) return;
         const now = new Date();
         const futureDate = new Date(now.getTime() + (plan.durationDays * 24 * 60 * 60 * 1000));
 
-        const newEntry: NoteEntry = {
-            date: now.toISOString().split('T')[0],
-            text: `Renovación: ${plan.name} ($${payment}). Modelo: ${model.toUpperCase()}.`
-        };
+        const { error } = await supabase
+            .from('stores')
+            .update({
+                status: 'active',
+                trial_ends_at: futureDate.toISOString()
+            })
+            .eq('id', selectedStore.id);
 
-        setStores(prev => prev.map(s => s.id === selectedStore.id ? {
-            ...s,
-            status: 'active',
-            planName: plan.name,
-            activationDate: now.toISOString().split('T')[0],
-            expiryDate: futureDate.toISOString().split('T')[0],
-            billingModel: model,
-            commissionRate: rate,
-            fixedFee: fixed,
-            lastPaymentAmount: payment,
-            notesHistory: [newEntry, ...s.notesHistory]
-        } : s));
+        if (!error) {
+            setStores(prev => prev.map(s => s.id === selectedStore.id ? {
+                ...s,
+                status: 'active',
+                expiryDate: futureDate.toISOString().split('T')[0],
+            } : s));
 
-        setIsActivationModalOpen(false);
-        setIsStoreDetailOpen(false);
-        alert(`🛰️ NAVE DESBLOQUEADA. Próximo aterrizaje: ${futureDate.toISOString().split('T')[0]}`);
+            setIsActivationModalOpen(false);
+            setIsStoreDetailOpen(false);
+            alert(`🛰️ NAVE DESBLOQUEADA. Próximo aterrizaje: ${futureDate.toISOString().split('T')[0]}`);
+        } else {
+            alert("Error al activar: " + error.message);
+        }
     };
 
     const addNote = (storeId: string, text: string) => {
@@ -196,7 +216,11 @@ const MasterApp: React.FC = () => {
                         <svg className="w-4 h-4 text-[#FFD700]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         <span className="text-[10px] font-black uppercase hidden md:inline">Tarifas</span>
                     </button>
-                    <button onClick={() => window.location.reload()} className="p-2 bg-white/5 border border-white/10 rounded-xl"><svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
+                    <button onClick={fetchStores} disabled={isLoading} className="p-2 bg-white/5 border border-white/10 rounded-xl disabled:opacity-50">
+                        <svg className={`w-5 h-5 text-gray-400 ${isLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    </button>
                 </div>
             </header>
 
