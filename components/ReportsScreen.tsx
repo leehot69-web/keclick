@@ -29,7 +29,14 @@ const DayClosureModal: React.FC<{
 }> = ({ reports, settings, onClose, onStartNewDay, currentWaiter, isAdmin }) => {
     const exchangeRate = settings.activeExchangeRate === 'bcv' ? settings.exchangeRateBCV : settings.exchangeRateParallel;
     const today = new Date().toISOString().split('T')[0];
-    const filteredReports = reports.filter(r => r.date === today && (isAdmin ? true : r.waiter === currentWaiter));
+    const waiterName = (currentWaiter || '').toLowerCase().trim();
+
+    const filteredReports = reports.filter(r => {
+        const reportDate = (r.date || '').split('T')[0].trim();
+        const reportWaiter = (r.waiter || '').toLowerCase().trim();
+        const isTargetWaiter = isAdmin ? true : reportWaiter === waiterName;
+        return reportDate === today && isTargetWaiter;
+    });
     // Solo sumamos al total lo que NO esté cerrado
     const totalPaid = filteredReports.reduce((acc, r) => (r.notes !== 'PENDIENTE' && r.notes !== 'ANULADO' && !r.closed) ? acc + (r.type === 'refund' ? -r.total : r.total) : acc, 0);
     const totalPending = filteredReports.reduce((acc, r) => r.notes === 'PENDIENTE' ? acc + r.total : acc, 0);
@@ -73,7 +80,13 @@ const ReportsScreen: React.FC<ReportsScreenProps> = ({ reports, dayClosures, onG
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
     const filteredByWaiterAndDate = useMemo(() => {
-        return reports.filter(r => (isAdmin ? true : r.waiter === currentWaiter) && r.date === selectedDate);
+        const waiterName = (currentWaiter || '').toLowerCase().trim();
+        return reports.filter(r => {
+            const reportWaiter = (r.waiter || '').toLowerCase().trim();
+            const reportDate = (r.date || '').split('T')[0].trim();
+            const isTargetWaiter = isAdmin ? true : reportWaiter === waiterName;
+            return isTargetWaiter && reportDate === selectedDate;
+        });
     }, [reports, currentWaiter, selectedDate, isAdmin]);
 
     // Si es admin, queremos ver el total GLOBAL del día, incluyendo lo que ya se cerró.
