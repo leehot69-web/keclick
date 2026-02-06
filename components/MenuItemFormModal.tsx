@@ -1,18 +1,21 @@
 
 import React, { useState } from 'react';
-import { MenuItem, ModifierGroup, ModifierAssignment } from '../types';
+import { MenuItem, ModifierGroup, ModifierAssignment, KitchenStation } from '../types';
 
 interface MenuItemFormModalProps {
   initialData?: MenuItem;
   allModifierGroups: ModifierGroup[];
+  kitchenStations: KitchenStation[];
   onSubmit: (item: MenuItem) => void;
   onClose: () => void;
 }
 
-const MenuItemFormModal: React.FC<MenuItemFormModalProps> = ({ initialData, allModifierGroups, onSubmit, onClose }) => {
+const MenuItemFormModal: React.FC<MenuItemFormModalProps> = ({ initialData, allModifierGroups, kitchenStations = [], onSubmit, onClose }) => {
   const [name, setName] = useState(initialData?.name || '');
   const [price, setPrice] = useState(initialData?.price || 0);
   const [description, setDescription] = useState(initialData?.description || '');
+  const [selectedStations, setSelectedStations] = useState<string[]>(initialData?.kitchenStations || []);
+
   // Initialize state by mapping modifierGroupTitles (which can be string | ModifierAssignment) to a simple string array of unique group titles.
   const [selectedGroupTitles, setSelectedGroupTitles] = useState<string[]>(() => {
     if (!initialData?.modifierGroupTitles) {
@@ -21,6 +24,7 @@ const MenuItemFormModal: React.FC<MenuItemFormModalProps> = ({ initialData, allM
     const titles = initialData.modifierGroupTitles.map(g => (typeof g === 'string' ? g : g.group));
     return [...new Set(titles)];
   });
+
 
   const handleToggleGroup = (title: string) => {
     setSelectedGroupTitles(prev =>
@@ -68,6 +72,7 @@ const MenuItemFormModal: React.FC<MenuItemFormModalProps> = ({ initialData, allM
       isPizza: isPizza,
       isSpecialPizza: isSpecialPizza,
       defaultIngredients: isSpecialPizza ? parsedDefaultIngredients : [],
+      kitchenStations: selectedStations,
     });
   };
 
@@ -164,6 +169,36 @@ const MenuItemFormModal: React.FC<MenuItemFormModalProps> = ({ initialData, allM
               </div>
             )}
           </div>
+
+          {/* Kitchen Station Assignment */}
+          {kitchenStations.length > 0 && (
+            <div>
+              <h3 className="text-md font-medium text-gray-700 border-b border-gray-200 pb-2 mb-3 tracking-tight">Enviar a Cocina (Secciones)</h3>
+              <div className="flex flex-wrap gap-2">
+                {kitchenStations.map(station => (
+                  <button
+                    key={station.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedStations(prev =>
+                        prev.includes(station.id)
+                          ? prev.filter(id => id !== station.id)
+                          : [...prev, station.id]
+                      );
+                    }}
+                    className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 transition-all ${selectedStations.includes(station.id)
+                      ? 'border-red-500 bg-red-50 text-red-600'
+                      : 'border-gray-100 bg-gray-50 text-gray-400'
+                      }`}
+                  >
+                    {station.name}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[9px] text-gray-400 mt-2">* Si no marcas ninguna, se enviará a "Cocina General"</p>
+            </div>
+          )}
+
 
           {/* Modifier Group Assignment */}
           {allModifierGroups.length > 0 && (

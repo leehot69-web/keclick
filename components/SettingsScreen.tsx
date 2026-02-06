@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { AppSettings, StoreProfile, ThemeName, MenuCategory, MenuItem, ModifierGroup, PizzaIngredient, User, UserRole } from '../types';
+import { AppSettings, StoreProfile, ThemeName, MenuCategory, MenuItem, ModifierGroup, PizzaIngredient, User, UserRole, KitchenStation } from '../types';
 import MenuManagementModal from './MenuManagementModal';
 import PriceIncreaseModal from './PriceIncreaseModal';
 import UserManagementModal from './UserManagementModal';
+import KitchenStationManagementModal from './KitchenStationManagementModal';
 
 interface SettingsScreenProps {
   settings: AppSettings;
@@ -36,10 +37,11 @@ const StoreProfileEditor: React.FC<{
   pizzaIngredients: PizzaIngredient[];
   pizzaBasePrices: Record<string, number>;
   onUpdatePizzaConfig: (ingredients: PizzaIngredient[], basePrices: Record<string, number>) => void;
-}> = ({ profile, onUpdate, onPermanentSave, onOpenPriceIncreaseModal, pizzaIngredients, pizzaBasePrices, onUpdatePizzaConfig }) => {
+  kitchenStations: KitchenStation[];
+}> = ({ profile, onUpdate, onPermanentSave, onOpenPriceIncreaseModal, pizzaIngredients, pizzaBasePrices, onUpdatePizzaConfig, kitchenStations = [] }) => {
   const [isMenuModalOpen, setMenuModalOpen] = useState(false);
   const themes: { name: ThemeName, label: string }[] = [
-    { name: 'margarita', label: 'Margarita' },
+    { name: 'keclick', label: 'Keclick' },
     { name: 'manga', label: 'Manga' },
     { name: 'red', label: 'Rojo' },
     { name: 'blue', label: 'Azul' },
@@ -47,29 +49,59 @@ const StoreProfileEditor: React.FC<{
   ];
 
   return (
-    <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 space-y-4">
+    <div className="bg-gray-50 rounded-2xl border border-gray-200 p-4 space-y-4">
       <div className="flex items-center gap-4 mb-2">
-        <div className="w-12 h-12 bg-white rounded-lg border overflow-hidden p-1">
-          <img src={profile.logo} alt="logo" className="w-full h-full object-contain" />
+        <div className="w-16 h-16 bg-[#111] rounded-2xl border border-white/10 overflow-hidden p-2 flex items-center justify-center">
+          {profile.logo ? <img src={profile.logo} alt="logo" className="w-full h-full object-contain" /> : <div className="text-white font-black">LOGO</div>}
         </div>
         <div>
-          <h3 className="font-bold text-gray-800">Perfil del Negocio</h3>
-          <p className="text-xs text-gray-500">Configuración visual y datos</p>
+          <h3 className="font-bold text-gray-800">Marca Keclick</h3>
+          <p className="text-[10px] text-gray-400 uppercase font-black">Personaliza tu App</p>
         </div>
       </div>
 
-      <input type="text" value={profile.name} onChange={(e) => onUpdate({ ...profile, name: e.target.value })} className="w-full p-3 bg-white border rounded-xl font-bold text-black" placeholder="Nombre" />
+      <div className="space-y-3 font-sans">
+        <div>
+          <label className="text-[9px] font-black text-gray-400 uppercase ml-1">Nombre Comercial</label>
+          <input type="text" value={profile.name} onChange={(e) => onUpdate({ ...profile, name: e.target.value })} className="w-full p-3 bg-white border border-gray-100 rounded-xl font-bold text-black focus:border-[#FF0000] outline-none" placeholder="Ej: Pizza House" />
+        </div>
+
+        <div>
+          <label className="text-[9px] font-black text-gray-400 uppercase ml-1">Logo del Negocio (Subir Imagen)</label>
+          <div className="flex gap-2">
+            <label className="w-full flex flex-col items-center justify-center p-4 bg-white border-2 border-dashed border-gray-100 rounded-2xl cursor-pointer hover:border-[#FF0000] hover:bg-red-50/30 transition-all group">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mb-1 text-gray-300 group-hover:text-[#FF0000]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+              <span className="text-[10px] font-black text-gray-400 group-hover:text-[#FF0000] uppercase tracking-tighter">Seleccionar Foto</span>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      onUpdate({ ...profile, logo: reader.result as string });
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+              />
+            </label>
+          </div>
+        </div>
+      </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <button onClick={() => setMenuModalOpen(true)} className="py-3 bg-gray-800 text-white rounded-xl font-bold text-sm">Gestionar Menú</button>
-        <button onClick={() => onOpenPriceIncreaseModal(profile)} className="py-3 bg-gray-800 text-white rounded-xl font-bold text-sm">Precios %</button>
+        <button onClick={() => setMenuModalOpen(true)} className="py-3 bg-gray-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-sm active:scale-95 transition-all">Gestionar Menú</button>
+        <button onClick={() => onOpenPriceIncreaseModal(profile)} className="py-3 bg-gray-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-sm active:scale-95 transition-all">Precios %</button>
       </div>
 
       <div className="pt-2">
         <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Tema Visual</label>
         <div className="flex gap-2">
           {themes.map(t => (
-            <button key={t.name} onClick={() => onUpdate({ ...profile, theme: t.name })} className={`flex-1 py-2 rounded-lg text-[10px] font-bold uppercase border-2 transition-all ${profile.theme === t.name ? 'border-red-500 bg-red-50 text-red-600' : 'border-gray-100 bg-white text-gray-400'}`}>
+            <button key={t.name} onClick={() => onUpdate({ ...profile, theme: t.name })} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${profile.theme === t.name ? 'border-[#FF0000] bg-red-50 text-[#FF0000]' : 'border-gray-100 bg-white text-gray-400'}`}>
               {t.label}
             </button>
           ))}
@@ -80,6 +112,7 @@ const StoreProfileEditor: React.FC<{
         <MenuManagementModal
           menu={profile.menu}
           modifierGroups={profile.modifierGroups}
+          kitchenStations={kitchenStations}
           onSave={(newMenu, newGroups) => {
             const updated = { ...profile, menu: newMenu, modifierGroups: newGroups };
             onPermanentSave(updated); // Guardar inmediatamente en el padre
@@ -107,6 +140,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = (props) => {
 
   const [priceIncreaseModalStore, setPriceIncreaseModalStore] = useState<StoreProfile | null>(null);
   const [isUserModalOpen, setUserModalOpen] = useState(false);
+  const [isStationModalOpen, setStationModalOpen] = useState(false);
 
   // isDirty calculado en tiempo real
   const isDirty = React.useMemo(() => {
@@ -155,7 +189,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = (props) => {
   const handleTestWhatsApp = () => {
     const num = localSettings.targetNumber.replace(/\D/g, '');
     if (!num) { alert("Ingresa un número primero"); return; }
-    window.open(`https://wa.me/${num}?text=${encodeURIComponent('Prueba de conexión desde Margarita App 🍕')}`, '_blank');
+    window.open(`https://wa.me/${num}?text=${encodeURIComponent('Prueba de conexión desde Keclick 🚀')}`, '_blank');
   };
 
   const handlePriceIncrease = (percentage: number, categoryTitle: string) => {
@@ -214,8 +248,43 @@ const SettingsScreen: React.FC<SettingsScreenProps> = (props) => {
             pizzaIngredients={pizzaIngredients}
             pizzaBasePrices={pizzaBasePrices}
             onUpdatePizzaConfig={onUpdatePizzaConfig}
+            kitchenStations={localSettings.kitchenStations || []}
           />
         ))}
+        <div className="bg-[#111] p-6 rounded-3xl border border-white/5 space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-[10px] font-black text-[#FFD700] uppercase tracking-widest">Estado del Servicio</h3>
+            <span className={`px-2 py-1 rounded-md text-[8px] font-black uppercase ${settings.isLicenseActive ? 'bg-green-500/10 text-green-500' : 'bg-[#FF0000]/10 text-[#FF0000]'}`}>
+              {settings.isLicenseActive ? 'Licencia Activa ✅' : 'Periodo de Prueba'}
+            </span>
+          </div>
+
+          <div className="border-t border-white/5 pt-4">
+            <p className="text-[9px] font-black text-gray-500 uppercase mb-1">Registrado como:</p>
+            <p className="text-lg font-black text-white italic tracking-tighter uppercase">{settings.businessName}</p>
+          </div>
+
+          {!settings.isLicenseActive && (
+            <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+              <p className="text-[10px] text-gray-400 leading-tight">
+                Días de cortesía restantes: <br />
+                <span className="text-white font-bold">Vence el {settings.trialStartDate ? new Date(new Date(settings.trialStartDate).getTime() + (5 * 24 * 60 * 60 * 1000)).toLocaleDateString() : 'próximamente'}</span>
+              </p>
+            </div>
+          )}
+
+
+          <div className="bg-black/40 p-3 rounded-xl border border-white/5 mt-2">
+            <p className="text-[7px] text-gray-500 leading-tight uppercase font-bold text-center">
+              Este sistema opera bajo licencia de uso de plataforma.<br />
+              El volumen de ventas se sincroniza con la central para la facturación del servicio técnico y mantenimiento.
+            </p>
+          </div>
+
+          <div className="flex justify-between items-center opacity-30 pt-2">
+            <span className="text-[8px] font-bold text-gray-600 uppercase tracking-widest">Ref: {settings.storeId}</span>
+          </div>
+        </div>
 
         <div className="space-y-4">
           <h3 className="font-bold text-gray-800 px-1 uppercase text-xs tracking-widest">Hardware de Impresión</h3>
@@ -287,6 +356,18 @@ const SettingsScreen: React.FC<SettingsScreenProps> = (props) => {
           </div>
           <div className="p-4 bg-gray-50 rounded-xl border flex items-center justify-between">
             <div className="flex flex-col">
+              <span className="font-bold text-gray-800 text-[10px] uppercase">WhatsApp a Cocina</span>
+              <span className="text-[9px] text-gray-500 font-medium">Auto-enviar pedido al WhatsApp</span>
+            </div>
+            <button
+              onClick={() => setLocalSettings({ ...localSettings, isWhatsAppEnabled: !localSettings.isWhatsAppEnabled })}
+              className={`w-12 h-6 rounded-full transition-colors relative ${localSettings.isWhatsAppEnabled ? 'bg-green-500' : 'bg-gray-300'}`}
+            >
+              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${localSettings.isWhatsAppEnabled ? 'right-1' : 'left-1'}`} />
+            </button>
+          </div>
+          <div className="p-4 bg-gray-50 rounded-xl border flex items-center justify-between">
+            <div className="flex flex-col">
               <span className="font-bold text-gray-800 text-[10px] uppercase">Meseros pueden cobrar</span>
               <span className="text-[9px] text-gray-500 font-medium">Permite a meseros finalizar ventas</span>
             </div>
@@ -300,6 +381,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = (props) => {
           <button onClick={() => setUserModalOpen(true)} className="w-full py-4 text-blue-600 font-bold bg-blue-50 rounded-2xl border border-blue-100 flex items-center justify-center gap-2 uppercase text-xs">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
             Gestionar Usuarios
+          </button>
+          <button onClick={() => setStationModalOpen(true)} className="w-full py-4 text-emerald-600 font-bold bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-center gap-2 uppercase text-xs">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+            Estaciones de Cocina
           </button>
           <button onClick={() => onClearAllSalesData()} className="w-full py-4 text-red-600 font-bold bg-red-50 rounded-2xl border border-red-100 uppercase text-xs">Limpiar Historial de Ventas</button>
         </div>
@@ -327,11 +414,23 @@ const SettingsScreen: React.FC<SettingsScreenProps> = (props) => {
       {isUserModalOpen && (
         <UserManagementModal
           users={localSettings.users}
+          kitchenStations={localSettings.kitchenStations || []}
           onSave={(updatedUsers) => {
             setLocalSettings(prev => ({ ...prev, users: updatedUsers }));
             setUserModalOpen(false);
           }}
           onClose={() => setUserModalOpen(false)}
+        />
+      )}
+
+      {isStationModalOpen && (
+        <KitchenStationManagementModal
+          stations={localSettings.kitchenStations}
+          onSave={(updatedStations) => {
+            setLocalSettings(prev => ({ ...prev, kitchenStations: updatedStations }));
+            setStationModalOpen(false);
+          }}
+          onClose={() => setStationModalOpen(false)}
         />
       )}
     </div>

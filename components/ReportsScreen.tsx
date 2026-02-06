@@ -76,8 +76,17 @@ const ReportsScreen: React.FC<ReportsScreenProps> = ({ reports, dayClosures, onG
         return reports.filter(r => (isAdmin ? true : r.waiter === currentWaiter) && r.date === selectedDate);
     }, [reports, currentWaiter, selectedDate, isAdmin]);
 
-    // Solo sumamos al "Total Cobrado" los registros que NO estén cerrados (closed)
-    const totalPaid = filteredByWaiterAndDate.reduce((sum, r) => (r.notes !== 'PENDIENTE' && r.notes !== 'ANULADO' && !r.closed) ? (r.type === 'refund' ? sum - r.total : sum + r.total) : sum, 0);
+    // Si es admin, queremos ver el total GLOBAL del día, incluyendo lo que ya se cerró.
+    // Si es mesero, solo lo que tiene "en caja" sin cerrar.
+    const totalPaid = filteredByWaiterAndDate.reduce((sum, r) => {
+        const isPaid = r.notes !== 'PENDIENTE' && r.notes !== 'ANULADO';
+        const shouldInclude = isAdmin ? isPaid : (isPaid && !r.closed);
+
+        if (shouldInclude) {
+            return r.type === 'refund' ? sum - r.total : sum + r.total;
+        }
+        return sum;
+    }, 0);
     const totalPending = filteredByWaiterAndDate.reduce((sum, r) => r.notes === 'PENDIENTE' ? sum + r.total : sum, 0);
 
     const isToday = selectedDate === new Date().toISOString().split('T')[0];
@@ -150,8 +159,44 @@ const ReportsScreen: React.FC<ReportsScreenProps> = ({ reports, dayClosures, onG
                                 <div className="flex gap-3 items-center">
                                     <div className={`w-2 h-10 rounded-full ${getStatusColor(report)}`}></div>
                                     <div>
-                                        <p className={`font-bold text-sm leading-none mb-1 ${report.notes === 'ANULADO' || report.closed ? 'text-gray-400' : 'text-black'} ${report.notes === 'ANULADO' ? 'line-through' : ''}`}>{report.customerName || (report.tableNumber > 0 ? `Ref: ${report.tableNumber}` : 'Pedido')}</p>
-                                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${getBadgeClass(report)}`}>{getClosedLabel(report)}</span>
+                                        <div className="flex items-center gap-2">
+                                            <p className={`font-bold text-sm leading-none ${report.notes === 'ANULADO' || report.closed ? 'text-gray-400' : 'text-black'} ${report.notes === 'ANULADO' ? 'line-through' : ''}`}>{report.customerName || (report.tableNumber > 0 ? `Ref: ${report.tableNumber}` : 'Pedido')}</p>
+                                            {report.order.some((item: any) => Object.values(item.kitchenStatus || {}).includes('ready') && !item.isServed) && (
+                                                <span className="flex h-5 w-5 items-center justify-center bg-green-500 text-white rounded-full animate-bounce shadow-lg shadow-green-200">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}>
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                    </svg>
+                                                </span>
+                                            )}
+
+                                        </div>
+                                        <div className="flex items-center gap-1.5 mt-0.5">
+                                            <div className="flex flex-wrap gap-1 mt-1 max-w-[150px]">
+                                                {report.order.map((item: any, idx) => {
+                                                    // Si el pedido está ANULADO, mostramos puntos rojos/grises y paramos lógica
+                                                    if (report.notes === 'ANULADO') {
+                                                        return <div key={idx} className="w-2 h-2 rounded-full bg-red-200" title="Anulado" />;
+                                                    }
+
+                                                    let dotClass = 'bg-gray-300'; // Pendiente
+                                                    const statuses = Object.values(item.kitchenStatus || {});
+
+                                                    if (item.isServed) {
+                                                        dotClass = 'bg-purple-500'; // Entregado
+                                                    } else if (statuses.includes('ready')) {
+                                                        dotClass = 'bg-green-500 animate-pulse'; // Listo
+                                                    } else if (statuses.includes('preparing')) {
+                                                        dotClass = 'bg-amber-500 animate-pulse'; // Preparando
+                                                    }
+
+                                                    return (
+                                                        <div key={idx} className={`w-2 h-2 rounded-full ${dotClass}`} title={`${item.quantity}x ${item.name}`} />
+                                                    );
+                                                })}
+                                            </div>
+                                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${getBadgeClass(report)}`}>{getClosedLabel(report)}</span>
+                                            <span className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">Mesero: {report.waiter}</span>
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="text-right">
@@ -167,15 +212,23 @@ const ReportsScreen: React.FC<ReportsScreenProps> = ({ reports, dayClosures, onG
             {activeSale && (
                 <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-[110] p-4" onClick={() => setActiveSale(null)}>
                     <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
-                        <div className="flex justify-between items-start mb-4">
+                        <div className="flex justify-between items-start mb-1">
                             <h3 className="text-lg font-black text-black uppercase tracking-tight">Detalle de Venta</h3>
                             <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${getBadgeClass(activeSale)}`}>{getClosedLabel(activeSale)}</span>
                         </div>
+                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-4">Atendido por: {activeSale.waiter} • {activeSale.time}</p>
                         <div className="space-y-2 mb-6 max-h-60 overflow-y-auto">
                             {activeSale.order.map((item: any, idx) => (
                                 <div key={idx} className="flex flex-col text-sm border-b border-gray-50 pb-2 last:border-0">
                                     <div className="flex justify-between items-start gap-2">
-                                        <span className="text-gray-600 font-bold leading-tight">{item.quantity}x {item.name}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`font-bold leading-tight ${Object.values(item.kitchenStatus || {}).includes('ready') ? 'text-green-600' : 'text-gray-600'}`}>
+                                                {item.quantity}x {item.name}
+                                            </span>
+                                            {Object.values(item.kitchenStatus || {}).includes('ready') && (
+                                                <span className="text-[10px] font-black text-green-600 uppercase tracking-tighter">LISTO</span>
+                                            )}
+                                        </div>
                                         <span className="font-black text-black shrink-0">${(item.price * item.quantity).toFixed(2)}</span>
                                     </div>
                                     {item.selectedModifiers && item.selectedModifiers.length > 0 && (

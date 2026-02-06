@@ -32,14 +32,14 @@ export const PIZZA_INGREDIENTS: PizzaIngredient[] = [
 
 // Ingredientes por defecto de pizzas especiales
 export const SPECIAL_PIZZA_INGREDIENTS: Record<string, string[]> = {
-  'Pizza Margarita': ['Maíz', 'Cebolla', 'Pimentón', 'Aceitunas Negras', 'Champiñones'],
+  'Pizza Keclick': ['Maíz', 'Cebolla', 'Pimentón', 'Aceitunas Negras', 'Champiñones'],
   'Pizza Caprichosa': ['Jamón', 'Tocineta', 'Pepperoni', 'Queso Amarillo'],
   'Pizza 4 Quesos': [], // Solo quesos del base
   'Pizza Bianca': ['Tocineta', 'Champiñones'], // + pollo al grill (en descripción)
 };
 
 // --- GRUPOS DE MODIFICADORES ---
-export const MARGARITA_MODIFIERS: ModifierGroup[] = [
+export const KECLICK_MODIFIERS: ModifierGroup[] = [
   {
     title: "Elige tu Proteína",
     selectionType: "single", minSelection: 1, maxSelection: 1,
@@ -121,8 +121,8 @@ export const MARGARITA_MODIFIERS: ModifierGroup[] = [
   }
 ];
 
-// --- DATOS DEL MENÚ MARGARITA (PIZZERÍA) ---
-export const MARGARITA_MENU_DATA: MenuCategory[] = [
+// --- DATOS DEL MENÚ KECLICK (PIZZERÍA) ---
+export const KECLICK_MENU_DATA: MenuCategory[] = [
   {
     title: 'ENTRADAS',
     items: [
@@ -147,7 +147,7 @@ export const MARGARITA_MENU_DATA: MenuCategory[] = [
     title: 'PIZZAS ESPECIALES',
     items: [
       {
-        name: 'Pizza Margarita',
+        name: 'Pizza Keclick',
         price: 18,
         available: true,
         description: 'Salsa napolitana, maíz, cebolla, pimentón, aceitunas negras y champiñones',
@@ -304,7 +304,7 @@ export const MARGARITA_MENU_DATA: MenuCategory[] = [
     title: 'AREPA',
     items: [
       {
-        name: 'Arepa Margarita',
+        name: 'Arepa Keclick',
         price: 9,
         available: true,
         description: '1 Proteína (Pollo, carne, puerco) con pico de gallo, queso rallado, salsa tártara',
@@ -336,7 +336,7 @@ export const MARGARITA_MENU_DATA: MenuCategory[] = [
   {
     title: 'COCTELES',
     items: [
-      { name: 'Margarita', price: 5, available: true },
+      { name: 'Keclick', price: 5, available: true },
       { name: 'Piña Colada', price: 5, available: true },
       { name: 'Daiquiri de Fresa', price: 5, available: true },
       { name: 'Mojito', price: 5, available: true },

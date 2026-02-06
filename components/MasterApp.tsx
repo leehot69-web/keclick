@@ -1,0 +1,495 @@
+
+import React, { useState, useEffect } from 'react';
+import MenuManagementModal from './MenuManagementModal';
+import { MenuCategory, ModifierGroup, PizzaIngredient } from '../types';
+import { KECLICK_MENU_DATA, KECLICK_MODIFIERS, PIZZA_BASE_PRICES, PIZZA_INGREDIENTS } from '../constants';
+
+// --- ESTRUCTURA DE PLANES ---
+interface Plan {
+    id: string;
+    name: string;
+    durationDays: number;
+    price: number;
+}
+
+const DEFAULT_PLANS: Plan[] = [
+    { id: 'monthly', name: 'Plan 1 Mes', durationDays: 30, price: 30 },
+    { id: 'quarter', name: 'Plan 3 Meses', durationDays: 90, price: 80 },
+    { id: 'semester', name: 'Plan 6 Meses', durationDays: 180, price: 150 },
+    { id: 'annual', name: 'Plan 1 Año', durationDays: 365, price: 250 },
+];
+
+interface NoteEntry {
+    date: string;
+    text: string;
+}
+
+interface ManagedStore {
+    id: string;
+    name: string;
+    ownerPhone: string;
+    status: 'active' | 'suspended' | 'expired';
+    activationDate: string;
+    expiryDate: string;
+    lastPaymentAmount: number;
+    paymentProofUrl?: string;
+    totalSales: number;
+    notesHistory: NoteEntry[];
+    billingModel: 'subscription' | 'commission' | 'hybrid';
+    commissionRate: number;
+    fixedFee: number;
+    planName?: string;
+    // Datos de Menú para edición remota
+    menu?: MenuCategory[];
+    modifierGroups?: ModifierGroup[];
+    pizzaIngredients?: PizzaIngredient[];
+    pizzaBasePrices?: Record<string, number>;
+}
+
+const MasterApp: React.FC = () => {
+    const [isAuthorized, setIsAuthorized] = useState(false);
+    const [pin, setPin] = useState('');
+    const [selectedStore, setSelectedStore] = useState<ManagedStore | null>(null);
+    const [isActivationModalOpen, setIsActivationModalOpen] = useState(false);
+    const [isStoreDetailOpen, setIsStoreDetailOpen] = useState(false);
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isMenuEditorOpen, setIsMenuEditorOpen] = useState(false);
+
+    const [plans, setPlans] = useState<Plan[]>(() => {
+        const saved = localStorage.getItem('kemaster_plans_v3');
+        return saved ? JSON.parse(saved) : DEFAULT_PLANS;
+    });
+
+    useEffect(() => {
+        localStorage.setItem('kemaster_plans_v3', JSON.stringify(plans));
+    }, [plans]);
+
+    const activeExchangeRate = 50; // Mock rate for BS calculation
+
+    const [stores, setStores] = useState<ManagedStore[]>(() => {
+        const savedStores = localStorage.getItem('kemaster_stores_v2');
+        if (savedStores) return JSON.parse(savedStores);
+
+        return [
+            {
+                id: 'KC-772A',
+                name: 'Pizzería La Mía (Juan)',
+                ownerPhone: '584120001122',
+                status: 'active',
+                activationDate: '2025-01-01',
+                expiryDate: '2026-08-01',
+                lastPaymentAmount: 30,
+                totalSales: 4500.50,
+                notesHistory: [{ date: '2025-01-01', text: 'Inicio de operaciones. Buen cliente.' }],
+                billingModel: 'subscription',
+                commissionRate: 0,
+                fixedFee: 30,
+                planName: 'Plan 1 Mes',
+                menu: KECLICK_MENU_DATA,
+                modifierGroups: KECLICK_MODIFIERS,
+                pizzaIngredients: PIZZA_INGREDIENTS,
+                pizzaBasePrices: PIZZA_BASE_PRICES
+            },
+            {
+                id: 'KC-BB99',
+                name: 'Hamburguesas King (Pedro)',
+                ownerPhone: '584125556677',
+                status: 'expired',
+                activationDate: '2024-12-10',
+                expiryDate: '2025-02-10',
+                lastPaymentAmount: 50,
+                totalSales: 890.20,
+                notesHistory: [{ date: '2024-12-10', text: 'Activación inicial modo híbrido.' }],
+                billingModel: 'hybrid',
+                commissionRate: 0.01,
+                fixedFee: 50,
+                planName: 'Plan 1 Mes',
+                menu: KECLICK_MENU_DATA,
+                modifierGroups: KECLICK_MODIFIERS,
+                pizzaIngredients: PIZZA_INGREDIENTS,
+                pizzaBasePrices: PIZZA_BASE_PRICES
+            }
+        ];
+    });
+
+    useEffect(() => {
+        localStorage.setItem('kemaster_stores_v2', JSON.stringify(stores));
+    }, [stores]);
+
+    const handleLogin = () => {
+        if (pin === '1985') setIsAuthorized(true);
+        else alert("Acceso Denegado 🛑");
+    };
+
+    const toggleStatus = (storeId: string) => {
+        setStores(prev => prev.map(s => {
+            if (s.id === storeId) {
+                const newStatus = s.status === 'active' ? 'suspended' : 'active';
+                return { ...s, status: newStatus };
+            }
+            return s;
+        }));
+    };
+
+    const activatePlan = (plan: Plan, model: 'subscription' | 'commission' | 'hybrid', rate: number = 0, fixed: number = 0, payment: number = 0) => {
+        if (!selectedStore) return;
+        const now = new Date();
+        const futureDate = new Date(now.getTime() + (plan.durationDays * 24 * 60 * 60 * 1000));
+
+        const newEntry: NoteEntry = {
+            date: now.toISOString().split('T')[0],
+            text: `Renovación: ${plan.name} ($${payment}). Modelo: ${model.toUpperCase()}.`
+        };
+
+        setStores(prev => prev.map(s => s.id === selectedStore.id ? {
+            ...s,
+            status: 'active',
+            planName: plan.name,
+            activationDate: now.toISOString().split('T')[0],
+            expiryDate: futureDate.toISOString().split('T')[0],
+            billingModel: model,
+            commissionRate: rate,
+            fixedFee: fixed,
+            lastPaymentAmount: payment,
+            notesHistory: [newEntry, ...s.notesHistory]
+        } : s));
+
+        setIsActivationModalOpen(false);
+        setIsStoreDetailOpen(false);
+        alert(`🛰️ NAVE DESBLOQUEADA. Próximo aterrizaje: ${futureDate.toISOString().split('T')[0]}`);
+    };
+
+    const addNote = (storeId: string, text: string) => {
+        if (!text.trim()) return;
+        setStores(prev => prev.map(s => s.id === storeId ? {
+            ...s,
+            notesHistory: [{ date: new Date().toISOString().split('T')[0], text }, ...s.notesHistory]
+        } : s));
+    };
+
+    if (!isAuthorized) {
+        return (
+            <div className="fixed inset-0 bg-[#020202] flex flex-col items-center justify-center p-6 text-white font-sans text-center">
+                <div className="w-20 h-20 bg-[#FF0000] rounded-2xl mb-6 flex items-center justify-center shadow-[0_0_40px_rgba(255,0,0,0.4)] animate-pulse border-2 border-[#FFD700]">
+                    <span className="text-3xl font-black italic">KM</span>
+                </div>
+                <h1 className="text-xl font-black tracking-widest italic mb-8 uppercase">Ke<span className="text-[#FFD700]">Master</span></h1>
+                <input type="password" value={pin} onChange={(e) => setPin(e.target.value)} placeholder="PIN CRÍTICO" className="bg-[#111] border border-white/5 p-4 rounded-xl text-center text-xl w-48 font-black outline-none focus:border-[#FF0000] mb-6 shadow-inner" />
+                <button onClick={handleLogin} className="bg-[#FF0000] px-10 py-4 rounded-xl font-black uppercase text-xs tracking-[0.3em] shadow-lg hover:scale-105 transition-all">Autorizar Sistemas</button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-h-screen bg-[#050505] text-white font-sans flex flex-col antialiased">
+            {/* Header de Comando */}
+            <header className="p-5 bg-black/80 backdrop-blur-md border-b border-white/5 flex justify-between items-center sticky top-0 z-50">
+                <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-[#FF0000] rounded-xl flex items-center justify-center font-black italic text-xl shadow-lg border border-white/10">KM</div>
+                    <div>
+                        <h1 className="text-lg font-black uppercase italic leading-none">Ke<span className="text-[#FFD700]">Master</span></h1>
+                        <p className="text-[7px] font-black text-gray-500 uppercase tracking-[0.5em] mt-1">Sistemas Globales de Control</p>
+                    </div>
+                </div>
+                <div className="flex gap-2">
+                    <button onClick={() => setIsSettingsOpen(true)} className="px-4 py-2 bg-white/5 rounded-xl border border-white/10 hover:bg-[#FFD700]/20 transition-all flex items-center gap-2">
+                        <svg className="w-4 h-4 text-[#FFD700]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <span className="text-[10px] font-black uppercase hidden md:inline">Tarifas</span>
+                    </button>
+                    <button onClick={() => window.location.reload()} className="p-2 bg-white/5 border border-white/10 rounded-xl"><svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
+                </div>
+            </header>
+
+            <main className="flex-1 overflow-y-auto p-6 max-w-7xl mx-auto w-full space-y-6 scrollbar-hide">
+                {/* Panel Inteligente de Flota */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-[#0a0a0a] p-5 rounded-[2rem] border border-white/5">
+                        <p className="text-[8px] font-black text-gray-500 uppercase mb-2 tracking-widest">Flota Activa</p>
+                        <p className="text-3xl font-black italic">{stores.filter(s => s.status === 'active').length} / {stores.length}</p>
+                    </div>
+                    <div className="bg-[#0a0a0a] p-5 rounded-[2rem] border border-white/5 border-t-[#FFD700]">
+                        <p className="text-[8px] font-black text-[#FFD700] uppercase mb-2 tracking-widest">Cartera Pendiente</p>
+                        <div className="flex items-baseline gap-1">
+                            <span className="text-sm font-black text-[#FFD700]">$</span>
+                            <p className="text-3xl font-black italic text-[#FFD700]">
+                                {stores.reduce((acc, s) => acc + s.fixedFee + (s.totalSales * s.commissionRate), 0).toFixed(0)}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="bg-[#0a0a0a] p-5 rounded-[2rem] border border-white/5">
+                        <p className="text-[8px] font-black text-gray-500 uppercase mb-2 tracking-widest">Bases Fijas</p>
+                        <p className="text-3xl font-black italic text-green-500">${stores.reduce((a, b) => a + b.fixedFee, 0)}</p>
+                    </div>
+                    <div className="bg-[#FF0000] p-5 rounded-[2rem] shadow-2xl">
+                        <p className="text-[8px] font-black text-white/50 uppercase mb-2 tracking-widest">Total GMV</p>
+                        <p className="text-3xl font-black italic">${stores.reduce((a, b) => a + b.totalSales, 0).toFixed(0)}</p>
+                    </div>
+                </div>
+
+                {/* Radar de Naves */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pb-24">
+                    {stores.map(store => {
+                        const daysLeft = Math.ceil((new Date(store.expiryDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                        return (
+                            <div key={store.id} className={`bg-[#0a0a0a] border ${store.status === 'active' ? 'border-white/5' : 'border-[#FF0000]/20'} rounded-[2.5rem] p-7 transition-all hover:bg-[#0f0f0f] relative overflow-hidden group shadow-xl`}>
+                                {/* Tags de Inteligencia */}
+                                <div className="absolute top-6 right-6 flex flex-col items-end gap-2">
+                                    <span className={`text-[8px] font-black uppercase px-3 py-1 rounded-full border ${store.status === 'active' ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20 animate-pulse'}`}>
+                                        {store.status === 'active' ? 'EN VUELO' : store.status.toUpperCase()}
+                                    </span>
+                                    <span className="text-[6px] font-black text-gray-500 uppercase tracking-widest">{store.planName || 'Plan Especial'}</span>
+                                </div>
+
+                                <div className="flex gap-5 items-start mb-8">
+                                    <div className="w-16 h-16 bg-[#111] rounded-[1.5rem] flex flex-col items-center justify-center border-2 border-white/5 shadow-inner">
+                                        <span className="font-black text-2xl text-white italic leading-none">{store.name.charAt(0)}</span>
+                                        <span className="text-[6px] font-black text-gray-600 mt-1 uppercase">ID: {store.id}</span>
+                                    </div>
+                                    <div className="pt-1">
+                                        <h3 className="font-black text-xl uppercase italic group-hover:text-[#FFD700] transition-colors leading-none mb-3">{store.name}</h3>
+                                        <div className="flex items-center gap-4">
+                                            <div className="flex flex-col">
+                                                <span className="text-[6px] font-black text-gray-500 uppercase">Aterrizaje</span>
+                                                <span className={`text-[10px] font-black ${daysLeft < 5 ? 'text-[#FF0000]' : 'text-white'}`}>{store.expiryDate}</span>
+                                            </div>
+                                            <div className="w-px h-6 bg-white/5"></div>
+                                            <div className="flex flex-col">
+                                                <span className="text-[6px] font-black text-gray-500 uppercase">A Favor</span>
+                                                <span className="text-[10px] font-black text-[#FFD700] italic">${(store.fixedFee + (store.totalSales * store.commissionRate)).toFixed(0)}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-2 mb-8">
+                                    <div className="bg-black/40 p-3 rounded-2xl border border-white/5">
+                                        <p className="text-[6px] font-black text-gray-600 uppercase mb-1 whitespace-nowrap">Último Pago</p>
+                                        <p className="text-sm font-black text-green-500">${store.lastPaymentAmount.toFixed(0)}</p>
+                                    </div>
+                                    <div className="bg-black/40 p-3 rounded-2xl border border-white/5">
+                                        <p className="text-[6px] font-black text-gray-600 uppercase mb-1">Ventas</p>
+                                        <p className="text-sm font-black text-white italic">${store.totalSales.toFixed(0)}</p>
+                                    </div>
+                                    <div className="bg-black/40 p-3 rounded-2xl border border-white/5">
+                                        <p className="text-[6px] font-black text-gray-600 uppercase mb-1">Modelo</p>
+                                        <p className="text-[8px] font-black text-gray-300 uppercase truncate mt-1">{store.billingModel}</p>
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <button onClick={() => { setSelectedStore(store); setIsStoreDetailOpen(true); }} className="flex-grow py-4 bg-white/5 border border-white/10 rounded-2xl font-black uppercase text-[9px] tracking-[0.2em] hover:bg-white/10 transition-all flex items-center justify-center gap-2">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                        Expediente Final
+                                    </button>
+                                    <button onClick={() => toggleStatus(store.id)} className={`w-14 h-14 rounded-2xl border transition-all flex items-center justify-center group/sw ${store.status === 'active' ? 'bg-[#FF0000]/10 border-[#FF0000]/20 hover:bg-[#FF0000]' : 'bg-green-500/10 border-green-500/20 hover:bg-green-500'}`}>
+                                        <svg className={`w-6 h-6 ${store.status === 'active' ? 'text-[#FF0000] group-hover/sw:text-white' : 'text-green-500 group-hover/sw:text-white'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
+                                    </button>
+                                    <button onClick={() => {
+                                        const amount = (store.fixedFee + (store.totalSales * store.commissionRate)).toFixed(0);
+                                        const msg = `*REPORTE KECLICK* 🛰️\n*${store.name}*\n\n⚙️ Fijo: $${store.fixedFee}\n📈 Ventas: $${store.totalSales.toFixed(0)}\n💎 Com: $${(store.totalSales * store.commissionRate).toFixed(0)}\n\n🚀 *TOTAL: $${amount}*`;
+                                        window.open(`https://wa.me/${store.ownerPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+                                    }} className="w-14 h-14 bg-[#FFD700]/10 border border-[#FFD700]/20 rounded-2xl hover:bg-[#FFD700] group/b flex items-center justify-center transition-all">
+                                        <svg className="w-6 h-6 text-[#FFD700] group-hover/b:text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                                    </button>
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+            </main>
+
+            {/* MODAL: EXPEDIENTE DE NAVE (INFORMACIÓN INTELIGENTE) */}
+            {isStoreDetailOpen && selectedStore && (
+                <div className="fixed inset-0 z-[1000] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4">
+                    <div className="bg-[#0a0a0a] border border-white/10 w-full max-w-4xl rounded-[3rem] p-8 shadow-2xl overflow-y-auto max-h-[95vh] scrollbar-hide relative">
+                        <button onClick={() => setIsStoreDetailOpen(false)} className="absolute top-6 right-8 text-gray-500 hover:text-white font-black uppercase text-[10px]">Cerrar Escotilla</button>
+
+                        <div className="flex flex-col md:flex-row gap-8 mb-10">
+                            <div className="w-32 h-32 bg-[#FF0000]/10 border-4 border-[#FF0000]/20 rounded-[2.5rem] flex items-center justify-center text-4xl font-black italic shadow-2xl shrink-0">
+                                {selectedStore.name.charAt(0)}
+                            </div>
+                            <div className="flex-grow">
+                                <p className="text-[10px] font-black text-[#FFD700] uppercase tracking-widest mb-1">Expediente de Nave Inteligente</p>
+                                <h2 className="text-4xl font-black uppercase italic tracking-tighter mb-4">{selectedStore.name}</h2>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                                        <span className="text-[7px] text-gray-500 font-black block uppercase mb-1">ID Único</span>
+                                        <span className="text-sm font-black font-mono text-white">{selectedStore.id}</span>
+                                    </div>
+                                    <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                                        <span className="text-[7px] text-gray-500 font-black block uppercase mb-1">Primer Despegue</span>
+                                        <span className="text-sm font-black text-white">{selectedStore.activationDate}</span>
+                                    </div>
+                                    <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                                        <span className="text-[7px] text-gray-500 font-black block uppercase mb-1">Próximo Saldo</span>
+                                        <span className="text-sm font-black text-[#FFD700]">${(selectedStore.fixedFee + (selectedStore.totalSales * selectedStore.commissionRate)).toFixed(0)}</span>
+                                    </div>
+                                    <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                                        <span className="text-[7px] text-gray-500 font-black block uppercase mb-1">Status Actual</span>
+                                        <span className={`text-[9px] font-black uppercase ${selectedStore.status === 'active' ? 'text-green-500' : 'text-red-500'}`}>{selectedStore.status}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            {/* Bitácora de Comentarios */}
+                            <div className="space-y-6">
+                                <h3 className="text-xs font-black uppercase tracking-widest border-l-2 border-[#FF0000] pl-4 mb-6">Bitácora del Capitán (Notas Históricas)</h3>
+                                <div className="bg-black/40 p-6 rounded-[2rem] border border-white/5 space-y-4 max-h-64 overflow-y-auto">
+                                    {selectedStore.notesHistory.map((n, i) => (
+                                        <div key={i} className="border-b border-white/5 pb-3">
+                                            <p className="text-[8px] font-black text-gray-600 mb-1">{n.date}</p>
+                                            <p className="text-xs text-gray-300 italic">"{n.text}"</p>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex gap-2">
+                                    <input id="new-note" type="text" placeholder="Anotar comentario de hoy..." className="flex-grow bg-[#111] border border-white/5 p-4 rounded-xl text-xs outline-none focus:border-[#FF0000]" />
+                                    <button onClick={() => {
+                                        const input = document.getElementById('new-note') as HTMLInputElement;
+                                        addNote(selectedStore.id, input.value);
+                                        input.value = '';
+                                    }} className="px-6 bg-[#FF0000] rounded-xl font-black uppercase text-[10px]">Anotar</button>
+                                </div>
+                            </div>
+
+                            {/* Gestión de Pagos y Activación */}
+                            <div className="space-y-6">
+                                <div className="bg-[#111] p-8 rounded-[2rem] border border-white/5 space-y-4">
+                                    <h3 className="text-[10px] font-black uppercase text-gray-500 mb-2">Administración Técnica</h3>
+                                    <button
+                                        onClick={() => {
+                                            setIsMenuEditorOpen(true);
+                                            setIsStoreDetailOpen(false);
+                                        }}
+                                        className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl flex items-center justify-center gap-2 hover:bg-blue-500 transition-all active:scale-95"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                        Gestionar Menú de Nave
+                                    </button>
+
+                                    <div className="border-t border-white/5 my-4"></div>
+
+                                    <button onClick={() => setIsActivationModalOpen(true)} className="w-full py-5 bg-[#FFD700] text-black rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-[#FFD700]/10 hover:scale-95 transition-all">Sincronizar Nuevo Ciclo</button>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => toggleStatus(selectedStore.id)} className="flex-grow py-4 bg-[#FF0000]/10 border border-[#FF0000]/20 text-[#FF0000] rounded-2xl font-black uppercase text-[9px] tracking-widest hover:bg-[#FF0000] hover:text-white transition-all">
+                                            {selectedStore.status === 'active' ? 'Apagar Sistema' : 'Encender Sistema'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL: EDITOR DE MENÚ REMOTO */}
+            {isMenuEditorOpen && selectedStore && (
+                <MenuManagementModal
+                    menu={selectedStore.menu || KECLICK_MENU_DATA}
+                    modifierGroups={selectedStore.modifierGroups || KECLICK_MODIFIERS}
+                    pizzaIngredients={selectedStore.pizzaIngredients || PIZZA_INGREDIENTS}
+                    pizzaBasePrices={selectedStore.pizzaBasePrices || PIZZA_BASE_PRICES}
+                    kitchenStations={[{ id: 'general', name: 'Cocina General', color: '#FF0000' }]}
+                    onClose={() => {
+                        setIsMenuEditorOpen(false);
+                        setIsStoreDetailOpen(true);
+                    }}
+                    onSave={(newMenu, newMods) => {
+                        setStores(prev => prev.map(s => s.id === selectedStore.id ? {
+                            ...s,
+                            menu: newMenu,
+                            modifierGroups: newMods
+                        } : s));
+                        alert("✅ Menú Sincronizado con la Nave");
+                    }}
+                    onUpdatePizzaConfig={(newIngs, newPrices) => {
+                        setStores(prev => prev.map(s => s.id === selectedStore.id ? {
+                            ...s,
+                            pizzaIngredients: newIngs,
+                            pizzaBasePrices: newPrices
+                        } : s));
+                    }}
+                />
+            )}
+
+            {/* MODAL: CONFIGURACIÓN DE PLANES */}
+            {isActivationModalOpen && selectedStore && (
+                <div className="fixed inset-0 z-[2000] bg-black/98 flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="bg-[#0a0a0a] border border-white/10 w-full max-w-5xl rounded-[3rem] p-6 md:p-10 my-auto overflow-hidden">
+                        <h2 className="text-xl md:text-2xl font-black uppercase italic text-center mb-6 md:mb-10 underline underline-offset-8 decoration-[#FF0000]">Selector de Vuelo PRO: {selectedStore.name}</h2>
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            {/* Fijo */}
+                            <div className="bg-white/2 p-6 rounded-3xl border border-white/5 space-y-3">
+                                <h4 className="text-[10px] font-black text-gray-500 uppercase text-center mb-4">SaaS Fijo</h4>
+                                {plans.map(p => (
+                                    <button key={p.id} onClick={() => activatePlan(p, 'subscription', 0, p.price, p.price)} className="w-full p-4 bg-white/5 border border-white/5 rounded-xl flex justify-between items-center font-black uppercase text-[10px] hover:bg-white hover:text-black transition-all">
+                                        <span>{p.name}</span> <span>${p.price}</span>
+                                    </button>
+                                ))}
+                            </div>
+                            {/* Dual */}
+                            <div className="bg-[#FF0000]/5 p-8 rounded-[2.5rem] border-2 border-[#FF0000]/30 scale-105 shadow-2xl space-y-6">
+                                <h4 className="text-[10px] font-black text-white uppercase text-center mb-4">Plan Dual Híbrido</h4>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {[30, 50, 70, 100].map(v => (
+                                        <button key={v} onClick={() => activatePlan(plans[0], 'hybrid', 0.01, v, v)} className="p-4 bg-white/10 border border-white/10 rounded-xl font-black text-[11px] hover:bg-white hover:text-black transition-all">${v}+1%</button>
+                                    ))}
+                                </div>
+                                <div className="bg-black/80 p-5 rounded-2xl border border-white/10">
+                                    <div className="flex gap-2">
+                                        <div className="flex-grow"><span className="text-[6px] font-black text-gray-600 block mb-1">BASE $</span><input id="dual-f-2" type="number" defaultValue="50" className="w-full bg-black border border-white/10 p-2 rounded-lg text-white font-black text-xs" /></div>
+                                        <div className="flex-grow"><span className="text-[6px] font-black text-gray-600 block mb-1">COM %</span><input id="dual-r-2" type="number" defaultValue="1" className="w-full bg-black border border-white/10 p-2 rounded-lg text-white font-black text-xs" /></div>
+                                    </div>
+                                    <button onClick={() => {
+                                        const f = parseFloat((document.getElementById('dual-f-2') as HTMLInputElement).value) || 0;
+                                        const r = (parseFloat((document.getElementById('dual-r-2') as HTMLInputElement).value) || 0) / 100;
+                                        const amt = parseFloat((document.getElementById('pay-amt') as HTMLInputElement)?.value) || f;
+                                        activatePlan(plans[0], 'hybrid', r, f, amt);
+                                    }} className="w-full mt-4 py-4 bg-[#FFD700] text-black font-black uppercase text-[10px] rounded-xl">Lanzar Plan Dual</button>
+                                </div>
+                            </div>
+                            {/* Com */}
+                            <div className="bg-white/2 p-6 rounded-3xl border border-white/5 space-y-4 text-center">
+                                <h4 className="text-[10px] font-black text-gray-500 uppercase mb-4">Solo Comisiones</h4>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {[0.01, 0.02, 0.03, 0.05, 0.10, 0.20].map(r => (
+                                        <button key={r} onClick={() => activatePlan(plans[2], 'commission', r, 0, 0)} className="p-4 bg-white/5 border border-white/5 rounded-xl font-black text-[11px] hover:bg-white hover:text-black transition-all">{(r * 100).toFixed(0)}%</button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                        <button onClick={() => setIsActivationModalOpen(false)} className="w-full mt-10 text-gray-700 font-black uppercase text-[10px] tracking-[1em]">Cerrar</button>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Tarifas Globales */}
+            {isSettingsOpen && (
+                <div className="fixed inset-0 z-[2000] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="bg-[#0a0a0a] border border-[#FFD700]/30 w-full max-w-sm rounded-[2rem] p-8 shadow-2xl my-auto">
+                        <h2 className="text-xl font-black uppercase italic mb-8 text-center">Costos Operativos</h2>
+                        <div className="space-y-4">
+                            {plans.map(p => (
+                                <div key={p.id} className="bg-white/5 p-4 rounded-2xl flex items-center justify-between border border-white/5">
+                                    <input type="text" value={p.name} onChange={(e) => setPlans(prev => prev.map(pl => pl.id === p.id ? { ...pl, name: e.target.value } : pl))} className="bg-transparent font-black text-xs uppercase text-white w-24 border-none outline-none" />
+                                    <div className="flex gap-2 items-center">
+                                        <input type="number" value={p.price} onChange={(e) => setPlans(prev => prev.map(pl => pl.id === p.id ? { ...pl, price: parseFloat(e.target.value) || 0 } : pl))} className="bg-black w-14 p-2 rounded-lg border border-[#FFD700]/20 text-right font-black text-xs outline-none text-[#FFD700]" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <button onClick={() => setIsSettingsOpen(false)} className="w-full mt-8 py-5 bg-[#FFD700] text-black font-black uppercase text-[10px] tracking-[0.3em] rounded-2xl">Guardar</button>
+                    </div>
+                </div>
+            )}
+
+            <footer className="mt-auto p-12 text-center opacity-30">
+                <p className="text-[10px] font-black text-gray-600 uppercase tracking-[1em]">KeMaster Global Fleet OS v2.0 • Capitán Master</p>
+            </footer>
+        </div>
+    );
+};
+
+export default MasterApp;

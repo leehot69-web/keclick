@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Facturación Manual | KeMaster</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-light: #818cf8;
+            --bg: #0f172a;
+            --card: #1e293b;
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #10b981;
+            --danger: #ef4444;
+            --radius: 16px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 2rem;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 2rem;
+        }
+
+        @media (max-width: 850px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+
+            body {
+                padding: 1rem;
+            }
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: var(--radius);
+            padding: 2rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        h1 .dot {
+            width: 8px;
+            height: 8px;
+            background: var(--accent);
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 100px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.05);
+            margin-bottom: 1rem;
+        }
+
+        .status-connected {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--accent);
+        }
+
+        .status-disconnected {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        input {
+            width: 100%;
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 0.75rem 1rem;
+            color: white;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: rgba(15, 23, 42, 0.8);
+        }
+
+        .item-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr auto;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            align-items: flex-end;
+        }
+
+        button {
+            cursor: pointer;
+            border: none;
+            border-radius: 10px;
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            width: 100%;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-light);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            width: 100%;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-add {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--accent);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            padding: 0.75rem;
+        }
+
+        .btn-delete {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            padding: 0.75rem;
+        }
+
+        .items-list {
+            margin-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            padding-top: 1rem;
+        }
+
+        .item-entry {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr auto;
+            gap: 1rem;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            align-items: center;
+        }
+
+        .preview-pane {
+            position: sticky;
+            top: 2rem;
+        }
+
+        .invoice-paper {
+            background: white;
+            color: black;
+            width: 300px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            border-radius: 4px;
+        }
+
+        .invoice-header {
+            text-align: center;
+            margin-bottom: 15px;
+            border-bottom: 1px dashed #ccc;
+            padding-bottom: 10px;
+        }
+
+        .invoice-title {
+            font-size: 18px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .invoice-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+        }
+
+        .invoice-table th {
+            text-align: left;
+            border-bottom: 1px solid #000;
+        }
+
+        .invoice-table td {
+            padding: 4px 0;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .invoice-total {
+            border-top: 1px dashed #000;
+            padding-top: 10px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .invoice-footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 10px;
+            color: #666;
+        }
+
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+
+            .invoice-paper,
+            .invoice-paper * {
+                visibility: visible;
+            }
+
+            .invoice-paper {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 80mm;
+                box-shadow: none;
+                padding: 5mm;
+            }
+
+            @page {
+                margin: 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="card">
+            <h1><span class="dot"></span> Facturación 80mm (BT)</h1>
+
+            <div id="btStatus" class="status-badge status-disconnected">
+                <span id="dotIndicator"
+                    style="width: 8px; height: 8px; border-radius: 50%; background: currentColor;"></span>
+                Impresora Desconectada
+            </div>
+
+            <button class="btn-secondary" onclick="connectBluetooth()" style="margin-bottom: 1.5rem;">
+                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M7 7l10 10M7 17l10-10M12 2v20"></path>
+                </svg>
+                Conectar Impresora Bluetooth
+            </button>
+
+            <div class="form-group">
+                <label for="customerName">Nombre del Cliente</label>
+                <input type="text" id="customerName" placeholder="Ej. Juan Luis" oninput="updatePreview()">
+            </div>
+
+            <div class="form-group">
+                <label>Agregar Productos</label>
+                <div class="item-row">
+                    <div><input type="text" id="itemName" placeholder="Producto"></div>
+                    <div><input type="number" id="itemQty" placeholder="Cant" value="1"></div>
+                    <div><input type="number" id="itemPrice" placeholder="$"></div>
+                    <button class="btn-add" onclick="addItem()" title="Agregar">
+                        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
+                            viewBox="0 0 24 24">
+                            <path d="M12 5v14M5 12h14"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="items-list" id="itemsList"></div>
+
+            <div style="margin-top: 2rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <button class="btn-primary" onclick="handlePrint('bt')" id="btnBT">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M7 17l5 5 5-5M12 22V10"></path>
+                    </svg>
+                    Imprimir BT
+                </button>
+                <button class="btn-primary" onclick="handlePrint('browser')" style="background: var(--primary-light);">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path
+                            d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-2-4h-8v8h8v-8z">
+                        </path>
+                    </svg>
+                    Navegador
+                </button>
+            </div>
+
+            <button class="btn-secondary" onclick="resetForm()" style="margin-top: 1rem; width: 100%; opacity: 0.7;">
+                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                    </path>
+                </svg>
+                Limpiar Todo
+            </button>
+        </div>
+
+        <div class="preview-pane">
+            <div class="invoice-paper" id="invoicePreview">
+                <div class="invoice-header">
+                    <div class="invoice-title">INVERSIONES EMANUEL C.A.</div>
+                    <div style="font-size: 10px; font-weight: bold; margin-bottom: 5px;">TODO PARA EL TAPICERO</div>
+                    <div style="font-size: 9px; font-style: italic;">Un mundo de materiales para tus proyectos</div>
+                    <div id="prevDate" style="margin-top: 5px;">--/--/----</div>
+                </div>
+
+                <div class="invoice-details">
+                    <div><strong>Cliente:</strong> <span id="prevCustomer">Venta General</span></div>
+                </div>
+
+                <table class="invoice-table">
+                    <thead>
+                        <tr>
+                            <th>Cant | Producto</th>
+                            <th class="text-right">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="prevItems"></tbody>
+                </table>
+
+                <div class="invoice-total">
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>TOTAL</span> <span id="prevTotal">$0.00</span>
+                    </div>
+                </div>
+
+                <div class="invoice-footer">
+                    <div style="font-weight: bold; margin-bottom: 5px;">¡GRACIAS POR SU COMPRA!</div>
+                    <div
+                        style="border-top: 1px solid #000; padding-top: 5px; margin-top: 5px; font-size: 9px; text-align: left;">
+                        <strong>CONDICIONES:</strong><br>
+                        - Para cambios es indispensable presentar esta factura original.<br>
+                        - Los cambios se realizan únicamente dentro de las primeras 48 horas.<br>
+                        - Mercancía cortada o usada no tiene cambio.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let items = [];
+        let printerCharacteristic = null;
+        const textEncoder = new TextEncoder();
+
+        window.onload = () => {
+            const today = new Date();
+            document.getElementById('prevDate').innerText = today.toLocaleDateString();
+
+            // Cargar datos solicitados
+            document.getElementById('customerName').value = "Naudi Concho";
+            items = [
+                { name: "Golden Negro", qty: 3, price: 3.5 },
+                { name: "Golden Blanco", qty: 8, price: 3.5 },
+                { name: "Piel Goman", qty: 9, price: 3 },
+                { name: "Swarovski/Diamantes", qty: 2, price: 5 }
+            ];
+            renderItems();
+            updatePreview();
+        };
+
+        // --- LÓGICA BLUETOOTH ---
+        async function connectBluetooth() {
+            try {
+                const device = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true,
+                    optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
+                });
+
+                const statusBadge = document.getElementById('btStatus');
+                statusBadge.innerHTML = `<span style="width: 8px; height: 8px; border-radius: 50%; background: currentColor;"></span> Conectando...`;
+
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
+                printerCharacteristic = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
+
+                statusBadge.className = "status-badge status-connected";
+                statusBadge.innerHTML = `<span style="width: 8px; height: 8px; border-radius: 50%; background: currentColor;"></span> Conectado a: ${device.name}`;
+                alert("✅ Impresora conectada exitosamente");
+            } catch (error) {
+                console.error(error);
+                alert("❌ Error al conectar: " + error.message);
+                const statusBadge = document.getElementById('btStatus');
+                statusBadge.className = "status-badge status-disconnected";
+                statusBadge.innerHTML = `<span style="width: 8px; height: 8px; border-radius: 50%; background: currentColor;"></span> Desconectada`;
+            }
+        }
+
+        const cleanText = (text) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+        const formatLine = (left, right, width) => {
+            const l = cleanText(left);
+            const r = cleanText(right);
+            const space = width - l.length - r.length;
+            return l + ' '.repeat(Math.max(0, space)) + r + '\n';
+        };
+
+        function generateCommands() {
+            const paperWidth = 42; // Estándar para 80mm
+            const divider = '-'.repeat(paperWidth) + '\n';
+            let cmd = '\x1B\x40'; // Init
+            cmd += '\x1B\x61\x31\x1B\x21\x30INVERSIONES EMANUEL C.A.\n';
+            cmd += '\x1B\x21\x01TODO PARA EL TAPICERO\n';
+            cmd += 'Un mundo de materiales para tus proyectos\n';
+            cmd += '\x1B\x21\x00\x1B\x61\x30';
+
+            const customer = document.getElementById('customerName').value || "VENTA GENERAL";
+            cmd += `FECHA: ${new Date().toLocaleDateString()}\n`;
+            cmd += `CLIENTE: ${cleanText(customer)}\n`;
+            cmd += divider;
+            cmd += formatLine('CANT | PRODUCTO', 'TOTAL', paperWidth);
+            cmd += divider;
+
+            let total = 0;
+            items.forEach(item => {
+                const sub = item.qty * item.price;
+                total += sub;
+
+                // Inteligencia para determinar la unidad
+                let unit = "unds";
+                const lowerName = item.name.toLowerCase();
+                if (lowerName.includes("golden") || lowerName.includes("piel") || lowerName.includes("tela")) {
+                    unit = "mts";
+                } else if (lowerName.includes("paquete") || lowerName.includes("diamante") || lowerName.includes("swarovski")) {
+                    unit = "pqs";
+                }
+
+                // Formato: "3 MTS GOLDEN NEGRO @ 3.50"
+                const line = `${item.qty} ${unit.toUpperCase()} ${item.name} @ ${item.price.toFixed(2)}`;
+                cmd += `\x1B\x21\x08` + formatLine(line, `$${sub.toFixed(2)}`, paperWidth) + `\x1B\x21\x00`;
+            });
+
+            cmd += divider;
+            cmd += `\x1B\x61\x32\x1B\x21\x30TOTAL: $${total.toFixed(2)}\n\x1B\x21\x00\x1B\x61\x31`;
+            cmd += '\n\x1B\x21\x01¡GRACIAS POR SU COMPRA!\n\n';
+            cmd += '\x1B\x61\x30'; // Left for conditions
+            cmd += 'CONDICIONES DE CAMBIO:\n';
+            cmd += '- Presentar factura original.\n';
+            cmd += '- Maximo 48 horas despues del pago.\n';
+            cmd += '- Mercancia cortada no tiene cambio.\n';
+            cmd += '\n\n\n\n\x1D\x56\x01'; // Cut
+            return cmd;
+        }
+
+        async function handlePrint(mode) {
+            if (mode === 'browser') {
+                window.print();
+                return;
+            }
+
+            if (!printerCharacteristic) {
+                alert("Primero conecta la impresora Bluetooth.");
+                return;
+            }
+
+            try {
+                const commands = generateCommands();
+                const data = textEncoder.encode(commands);
+                // Dividir en trozos de 20 bytes (estándar BLE)
+                for (let i = 0; i < data.length; i += 20) {
+                    const chunk = data.slice(i, i + 20);
+                    await printerCharacteristic.writeValue(chunk);
+                }
+                alert("✅ Enviado a impresora");
+            } catch (error) {
+                alert("❌ Error al imprimir: " + error.message);
+            }
+        }
+
+        // --- LÓGICA DE FORMULARIO ---
+        function addItem() {
+            const name = document.getElementById('itemName').value;
+            const qty = parseFloat(document.getElementById('itemQty').value);
+            const price = parseFloat(document.getElementById('itemPrice').value);
+            if (!name || isNaN(qty) || isNaN(price)) return;
+            items.push({ name, qty, price });
+            document.getElementById('itemName').value = "";
+            document.getElementById('itemPrice').value = "";
+            renderItems();
+            updatePreview();
+        }
+
+        function deleteItem(index) {
+            items.splice(index, 1);
+            renderItems();
+            updatePreview();
+        }
+
+        function renderItems() {
+            const list = document.getElementById('itemsList');
+            list.innerHTML = "";
+            items.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = "item-entry";
+                div.innerHTML = `
+                    <div style="font-weight: 500;">${item.name}</div>
+                    <div style="color: var(--text-muted);">x${item.qty}</div>
+                    <div style="color: var(--accent);">$${(item.qty * item.price).toFixed(2)}</div>
+                    <button class="btn-delete" onclick="deleteItem(${index})"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"></path></svg></button>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        function updatePreview() {
+            const customer = document.getElementById('customerName').value || "Venta General";
+            document.getElementById('prevCustomer').innerText = customer;
+            const tbody = document.getElementById('prevItems');
+            tbody.innerHTML = "";
+            let total = 0;
+            items.forEach(item => {
+                const sub = item.qty * item.price;
+                total += sub;
+
+                // Inteligencia para determinar la unidad
+                let unit = "unds";
+                const lowerName = item.name.toLowerCase();
+                if (lowerName.includes("golden") || lowerName.includes("piel") || lowerName.includes("tela")) {
+                    unit = "mts";
+                } else if (lowerName.includes("paquete") || lowerName.includes("diamante") || lowerName.includes("swarovski")) {
+                    unit = "pqs";
+                }
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>
+                        <strong>${item.qty} ${unit}</strong> ${item.name}<br>
+                        <small style="color: #666;">Precio: $${item.price.toFixed(2)} /${unit}</small>
+                    </td>
+                    <td class="text-right" style="vertical-align: bottom;">$${sub.toFixed(2)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+            document.getElementById('prevTotal').innerText = `$${total.toFixed(2)}`;
+        }
+
+        function resetForm() {
+            if (confirm("¿Vaciar factura?")) {
+                items = [];
+                document.getElementById('customerName').value = "";
+                renderItems();
+                updatePreview();
+            }
+        }
+    </script>
+</body>
+
+</html>

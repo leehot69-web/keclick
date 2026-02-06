@@ -42,15 +42,20 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, businessName,
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center p-6 bg-cover bg-center" style={{ backgroundImage: 'linear-gradient(rgba(0,0,0,0.8), rgba(0,0,0,0.9)), url(https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=2070&auto=format&fit=crop)' }}>
+    <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center p-6 bg-cover bg-center" style={{ backgroundImage: 'linear-gradient(rgba(0,0,0,0.9), rgba(0,0,0,0.95)), url(https://images.unsplash.com/photo-1543353071-087092ec393a?q=80&w=2070&auto=format&fit=crop)' }}>
 
       {/* Logo y Nombre */}
       <div className="mb-10 text-center animate-in fade-in slide-in-from-top duration-700">
-        <div className="w-24 h-24 bg-white rounded-3xl p-3 mx-auto mb-4 shadow-2xl shadow-red-500/20">
-          <img src={businessLogo} alt="Logo" className="w-full h-full object-contain" />
+        <div className="w-24 h-24 bg-[#111] rounded-3xl p-3 mx-auto mb-4 shadow-2xl shadow-red-500/10 border border-white/5 flex flex-col items-center justify-center">
+          <div className="text-2xl font-black uppercase tracking-tighter flex items-center">
+            <span className="text-[#FF0000]">Ke</span>
+            <span className="text-[#FFD700]">click</span>
+          </div>
         </div>
-        <h1 className="text-3xl font-black text-white uppercase tracking-tighter">{businessName}</h1>
-        <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-1">Sistema POS v2.0</p>
+        <h1 className="text-3xl font-black text-white uppercase tracking-tighter italic">
+          <span className="text-[#FF0000]">KE</span><span className="text-[#FFD700]">CLICK</span>
+        </h1>
+        <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mt-1">SISTEMA INTEGRAL DE VENTAS</p>
       </div>
 
       {/* Indicadores de PIN */}
@@ -59,10 +64,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, businessName,
           <div
             key={i}
             className={`w-4 h-4 rounded-full border-2 transition-all duration-200 ${error
-                ? 'bg-red-500 border-red-500 animate-bounce'
-                : pin.length > i
-                  ? 'bg-red-500 border-red-500 scale-125 shadow-[0_0_15px_rgba(239,68,68,0.5)]'
-                  : 'bg-transparent border-white/20'
+              ? 'bg-red-500 border-red-500 animate-bounce'
+              : pin.length > i
+                ? 'bg-red-500 border-red-500 scale-125 shadow-[0_0_15px_rgba(239,68,68,0.5)]'
+                : 'bg-transparent border-white/20'
               }`}
           />
         ))}

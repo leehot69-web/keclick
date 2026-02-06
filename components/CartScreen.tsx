@@ -27,10 +27,11 @@ interface CartScreenProps {
     onOpenPendingPaymentsModal?: () => void;
     onPrintComanda?: (table: Table) => void;
     isPrinterConnected?: boolean;
+    isAdmin?: boolean;
 }
 
 const CartScreen: React.FC<CartScreenProps> = (props) => {
-    const { activeRate, isEditing = false } = props;
+    const { activeRate, isEditing = false, isAdmin = false } = props;
     const isPosMode = props.table !== undefined;
 
     // --- MODO DELIVERY / POS SIMPLE ---
@@ -97,7 +98,8 @@ const CartScreen: React.FC<CartScreenProps> = (props) => {
                 {cart.map(item => {
                     const modTotal = item.selectedModifiers.reduce((s, m) => s + m.option.price, 0);
                     const unitPrice = item.price + modTotal;
-                    const isOriginal = item.isServed;
+                    // El Admin puede editar incluso lo que ya está servido
+                    const isOriginal = item.isServed && !isAdmin;
 
                     return (
                         <div key={item.id} className={`bg-white p-4 rounded-xl shadow-sm border ${isOriginal ? 'border-amber-200 bg-amber-50/20' : 'border-gray-100'} flex flex-col`}>

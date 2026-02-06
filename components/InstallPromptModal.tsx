@@ -18,7 +18,7 @@ const InstallPromptModal: React.FC<InstallPromptModalProps> = ({ onClose, onInst
         <div className="text-center">
           <div className="relative inline-block mb-6">
             <div className="w-24 h-24 bg-white/10 backdrop-blur-md rounded-[2rem] flex items-center justify-center mx-auto shadow-xl border border-white/10 p-2 transform -rotate-3">
-              <img src="https://i.imgur.com/TXJrPwn.png" alt="Margarita Logo" className="w-full h-full object-contain" />
+              <img src="https://i.imgur.com/TXJrPwn.png" alt="Keclick Logo" className="w-full h-full object-contain" />
             </div>
             <div className="absolute -bottom-2 -right-2 bg-[#00D4AA] text-[#051a12] p-1.5 rounded-full shadow-lg border-4 border-[#051a12]">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, MenuItem, StoreProfile, CartItem, CustomerDetails, SelectedModifier, MenuCategory, ModifierGroup, AppSettings, SaleRecord, ThemeName, PizzaConfiguration, PizzaIngredient, PizzaSize, User, DayClosure } from './types';
+import { View, MenuItem, StoreProfile, CartItem, CustomerDetails, SelectedModifier, MenuCategory, ModifierGroup, AppSettings, SaleRecord, ThemeName, PizzaConfiguration, PizzaIngredient, PizzaSize, User, DayClosure, UserRole } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
-import { MARGARITA_MENU_DATA, MARGARITA_MODIFIERS, PIZZA_BASE_PRICES, PIZZA_INGREDIENTS } from './constants';
+import { useSupabaseSync } from './hooks/useSupabaseSync';
+import { KECLICK_MENU_DATA, KECLICK_MODIFIERS, PIZZA_BASE_PRICES, PIZZA_INGREDIENTS } from './constants';
 import MenuScreen from './components/MenuScreen';
 import CartScreen from './components/CartScreen';
 import CheckoutScreen from './components/CheckoutScreen';
@@ -18,34 +19,117 @@ import SuccessScreen from './components/SuccessScreen';
 import AdminAuthModal from './components/AdminAuthModal';
 import PizzaBuilderModal from './components/PizzaBuilderModal';
 import LoginScreen from './components/LoginScreen';
+import AdminDashboard from './components/AdminDashboard';
+import KitchenScreen from './components/KitchenScreen';
 
 function App() {
   // --- ESTADO PERSISTENTE ---
-  const [menu, setMenu] = useLocalStorage<MenuCategory[]>('app_menu_v1', MARGARITA_MENU_DATA);
-  const [modifierGroups, setModifierGroups] = useLocalStorage<ModifierGroup[]>('app_modifiers_v1', MARGARITA_MODIFIERS);
-  const [theme, setTheme] = useLocalStorage<ThemeName>('app_theme_v1', 'margarita');
-  const [businessName, setBusinessName] = useLocalStorage<string>('app_business_name_v1', 'Margarita Pizzería');
+  const [menu, setMenu] = useLocalStorage<MenuCategory[]>('app_menu_v1', KECLICK_MENU_DATA);
+  const [modifierGroups, setModifierGroups] = useLocalStorage<ModifierGroup[]>('app_modifiers_v1', KECLICK_MODIFIERS);
+  const [theme, setTheme] = useLocalStorage<ThemeName>('app_theme_v1', 'keclick');
+  const [businessName, setBusinessName] = useLocalStorage<string>('app_business_name_v1', 'Keclick');
   const [pizzaIngredients, setPizzaIngredients] = useLocalStorage<PizzaIngredient[]>('app_pizza_ingredients_v1', PIZZA_INGREDIENTS);
   const [pizzaBasePrices, setPizzaBasePrices] = useLocalStorage<Record<string, number>>('app_pizza_base_prices_v1', PIZZA_BASE_PRICES);
-  const businessLogo = "https://i.imgur.com/TXJrPwn.png";
+  const businessLogo = "https://i.ibb.co/9HxvMhx/keclick-logo.png"; // Placeholder image but we'll use CSS mostly
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [removalReasons, setRemovalReasons] = useState<Record<string, string>>({});
 
   const [settings, setSettings] = useLocalStorage<AppSettings>('app_settings_v1', {
+    storeId: `KC-${Math.random().toString(36).substr(2, 9).toUpperCase()}`, // Genera ID único como KC-A1B2C3
+    businessName: 'Keclick',
+    businessLogo: 'https://i.ibb.co/9HxvMhx/keclick-logo.png',
     totalTables: 20,
     printerPaperWidth: '58mm',
     exchangeRateBCV: 36.5,
     exchangeRateParallel: 40,
     activeExchangeRate: 'parallel',
-    isTrialActive: false,
+    isTrialActive: true,
+    isLicenseActive: false,
+    trialStartDate: new Date().toISOString(),
     operationCount: 0,
+    lifetimeRevenueUSD: 0,
     targetNumber: '584120000000',
+    isWhatsAppEnabled: true,
     waitersCanCharge: true,
+    kitchenStations: [
+      { id: 'general', name: 'Cocina General', color: '#FF0000' }
+    ],
     users: [
       { id: '1', name: 'Admin', pin: '0000', role: 'admin' },
-      { id: '2', name: 'Mesero 1', pin: '1234', role: 'mesero' }
+      { id: '2', name: 'Mesero 1', pin: '1234', role: 'mesero' },
+      { id: '3', name: 'Alejandro', pin: '1111', role: 'mesero' },
+      { id: '4', name: 'Cocina', pin: '9999', role: 'cocinero', kitchenStation: 'general' }
     ]
   });
+
+  // --- LÓGICA DE LICENCIA Y SUSCRIPCIÓN ---
+  const isSubscriptionInactive = React.useMemo(() => {
+    const now = new Date();
+
+    // 1. Si ya tiene licencia activa (pago realizado)
+    if (settings.isLicenseActive) {
+      if (!settings.licenseExpiryDate) return false; // Licencia vitalicia si no hay fecha
+      const expiry = new Date(settings.licenseExpiryDate);
+      return now > expiry; // Bloquear si la fecha actual pasó el vencimiento
+    }
+
+    // 2. Si no tiene licencia, chequear el periodo de prueba (Trial)
+    if (settings.trialStartDate) {
+      const start = new Date(settings.trialStartDate);
+      const diffTime = Math.abs(now.getTime() - start.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays > 5; // Bloqueo al 5to día de prueba
+    }
+
+    return false;
+  }, [settings.trialStartDate, settings.isLicenseActive, settings.licenseExpiryDate]);
+
+  // Logo Vectorial Keclick
+  const KeclickLogo = ({ size = "text-3xl" }: { size?: string }) => (
+    <div className={`font-black ${size} uppercase tracking-tighter flex items-center`}>
+      <span className="text-[#FF0000]">Ke</span>
+      <span className="text-[#FFD700]">click</span>
+    </div>
+  );
+
+  // Asegurar que usuarios esenciales existan y configuraciones locales estén al día
+  useEffect(() => {
+    let updated = false;
+    let newSettings = { ...settings };
+
+    // 1. Asegurar que Alejandro exista
+    const hasAlejandro = settings.users.some(u => u.name.toLowerCase() === 'alejandro');
+    if (!hasAlejandro) {
+      const newAlejandro = { id: Math.random().toString(36).substr(2, 9), name: 'Alejandro', pin: '1111', role: 'mesero' as UserRole };
+      newSettings.users = [...newSettings.users, newAlejandro];
+      updated = true;
+    }
+
+    // 2. Asegurar que el usuario de Cocina (9999) exista si no hay ninguno
+    const hasCook = settings.users.some(u => u.role === 'cocinero' || u.pin === '9999');
+    if (!hasCook) {
+      const newCook = { id: 'cook-default', name: 'Cocina', pin: '9999', role: 'cocinero' as UserRole, kitchenStation: 'general' };
+      newSettings.users = [...newSettings.users, newCook];
+      updated = true;
+    }
+
+    // 3. Asegurar que existan estaciones básicas
+    if (!settings.kitchenStations || settings.kitchenStations.length === 0) {
+      newSettings.kitchenStations = [{ id: 'general', name: 'Cocina General', color: '#10B981' }];
+      updated = true;
+    }
+
+    // 4. Forzar permiso de cobro si no está definido
+    if (settings.waitersCanCharge === undefined) {
+      newSettings.waitersCanCharge = true;
+      updated = true;
+    }
+
+    if (updated) {
+      setSettings(newSettings);
+    }
+  }, [settings, setSettings]);
 
   const [reports, setReports] = useLocalStorage<SaleRecord[]>('app_sales_reports', []);
   const [dayClosures, setDayClosures] = useLocalStorage<DayClosure[]>('app_day_closures', []);
@@ -59,11 +143,98 @@ function App() {
   const [isSalesHistoryModalOpen, setIsSalesHistoryModalOpen] = useState(false);
   const [isConfirmOrderModalOpen, setConfirmOrderModalOpen] = useState(false);
   const [pendingVoidReportId, setPendingVoidReportId] = useState<string | null>(null);
+
+  // --- ESCUCHA DE SUPABASE ---
+  const { syncSale, syncSettings, syncClosure } = useSupabaseSync(
+    settings,
+    setSettings,
+    reports,
+    setReports,
+    dayClosures,
+    setDayClosures,
+    menu,
+    modifierGroups
+  );
   const [isAdminAuthForClearCart, setIsAdminAuthForClearCart] = useState(false);
   const [pendingRemoveItemId, setPendingRemoveItemId] = useState<string | null>(null);
   const [pizzaBuilderItem, setPizzaBuilderItem] = useState<MenuItem | null>(null);
   const [lastSoldRecord, setLastSoldRecord] = useState<{ cart: CartItem[], details: CustomerDetails } | null>(null);
   const [receiptToPrint, setReceiptToPrint] = useState<{ cart: CartItem[], customer: CustomerDetails, waiter: string, title: string } | null>(null);
+
+  // Detalles de platos listos para este mesero (EXCLUYENDO los ya entregados/servidos)
+  const readyPlatesDetails = React.useMemo(() => {
+    if (!currentUser) return [];
+    const today = new Date().toISOString().split('T')[0];
+
+    const readyItems: { reportId: string, itemName: string, table: string }[] = [];
+
+    reports.forEach(r => {
+      if (r.date === today && r.notes !== 'ANULADO' && !r.closed && r.waiter === currentUser.name) {
+        r.order.forEach((item: any) => {
+          // Si está listo en cocina PERO aún no ha sido marcado como "servido" por el mesero
+          if (Object.values(item.kitchenStatus || {}).includes('ready') && !item.isServed) {
+            readyItems.push({
+              reportId: r.id,
+              itemName: item.name,
+              table: r.customerName || (r.tableNumber > 0 ? `Mesa ${r.tableNumber}` : 'Pedido')
+            });
+          }
+        });
+      }
+    });
+
+    return readyItems;
+  }, [reports, currentUser]);
+
+  const hasReadyPlates = readyPlatesDetails.length > 0;
+
+  // Detalles de platos en PREPARACIÓN para este mesero
+  const preparingPlatesDetails = React.useMemo(() => {
+    if (!currentUser) return [];
+    const today = new Date().toISOString().split('T')[0];
+    const preparingItems: { itemName: string, table: string }[] = [];
+
+    reports.forEach(r => {
+      if (r.date === today && r.notes !== 'ANULADO' && !r.closed && r.waiter === currentUser.name) {
+        r.order.forEach((item: any) => {
+          // Si está en preparación (y no listo ni servido)
+          // Nota: Un ítem puede tener parte en 'preparing' y parte en 'pending'. Priorizamos mostrar si algo se mueve.
+          const statuses = Object.values(item.kitchenStatus || {});
+          if (statuses.includes('preparing') && !statuses.includes('ready') && !item.isServed) {
+            preparingItems.push({
+              itemName: item.name,
+              table: r.customerName || (r.tableNumber > 0 ? `Mesa ${r.tableNumber}` : 'Pedido')
+            });
+          }
+        });
+      }
+    });
+    return preparingItems;
+  }, [reports, currentUser]);
+
+  const hasPreparingPlates = preparingPlatesDetails.length > 0;
+
+  // Función para que el mesero marque que ya recogió/entregó los platos listos
+  const handleMarkAllServed = () => {
+    const reportIdsToUpdate = [...new Set(readyPlatesDetails.map(d => d.reportId))];
+
+    setReports(prev => prev.map(r => {
+      if (!reportIdsToUpdate.includes(r.id)) return r;
+
+      return {
+        ...r,
+        order: r.order.map((item: any) => {
+          // Si estaba listo, lo marcamos como servido para quitar la notificación
+          if (Object.values(item.kitchenStatus || {}).includes('ready')) {
+            return { ...item, isServed: true };
+          }
+          return item;
+        })
+      };
+    }));
+  };
+
+
 
   const memoizedProfiles = React.useMemo(() => [{
     id: 'main',
@@ -286,7 +457,10 @@ function App() {
 
   const executeVoidReport = () => {
     if (!pendingVoidReportId) return;
-    setReports(prev => prev.map(r => r.id === pendingVoidReportId ? { ...r, notes: 'ANULADO', total: 0, type: 'refund' } : r));
+    const updatedReports = reports.map(r => r.id === pendingVoidReportId ? { ...r, notes: 'ANULADO', total: 0, type: 'refund' as const } : r);
+    setReports(updatedReports);
+    const voidedReport = updatedReports.find(r => r.id === pendingVoidReportId);
+    if (voidedReport) syncSale(voidedReport);
     setPendingVoidReportId(null);
   };
 
@@ -350,14 +524,18 @@ function App() {
 
       // Guardar el cierre
       setDayClosures(prev => [newClosure, ...prev]);
+      syncClosure(newClosure);
 
       // Marcar los reportes como cerrados
-      setReports(prev => prev.map(r => {
+      const updatedReports = reports.map(r => {
         if (reportsToClose.find(rc => rc.id === r.id)) {
-          return { ...r, closed: true, closureId: newClosure.id };
+          const updated = { ...r, closed: true, closureId: newClosure.id };
+          syncSale(updated);
+          return updated;
         }
         return r;
-      }));
+      });
+      setReports(updatedReports);
 
       alert(`Cierre registrado exitosamente.\nTotal: $${totalPaid.toFixed(2)}\nVentas cerradas: ${reportsToClose.length}`);
       setCurrentUser(null);
@@ -367,7 +545,8 @@ function App() {
 
   const handleUpdateQuantity = (cartItemId: string, newQuantity: number) => {
     const item = cart.find(i => i.id === cartItemId);
-    if (item?.isServed) {
+    const isAdmin = currentUser?.role === 'admin';
+    if (item?.isServed && !isAdmin) {
       alert("No puedes modificar un producto ya servido. Para pedir una unidad adicional, agrégala como un nuevo producto desde el menú.");
       return;
     }
@@ -384,15 +563,20 @@ function App() {
     const item = cart.find(i => i.id === id);
     const isEditing = !!editingReportId;
 
-    if (item?.isServed || isEditing) {
+    const isAdmin = currentUser?.role === 'admin';
+
+    if ((item?.isServed && !isAdmin) || isEditing) {
       setPendingRemoveItemId(id);
     } else {
       setCart(prev => prev.filter(i => i.id !== id));
     }
   };
 
-  const executeRemoveItem = () => {
+  const executeRemoveItem = (reason?: string) => {
     if (pendingRemoveItemId) {
+      if (reason) {
+        setRemovalReasons(prev => ({ ...prev, [pendingRemoveItemId]: reason }));
+      }
       setCart(prev => prev.filter(i => i.id !== pendingRemoveItemId));
       setPendingRemoveItemId(null);
     }
@@ -412,7 +596,8 @@ function App() {
       name: item.name,
       price: item.price,
       quantity: quantity,
-      selectedModifiers: selectedModifiers
+      selectedModifiers: selectedModifiers,
+      kitchenStations: item.kitchenStations
     }]);
     setTriggerCartShake(true);
     setTimeout(() => setTriggerCartShake(false), 500);
@@ -487,7 +672,8 @@ function App() {
       quantity: quantity,
       selectedModifiers: modifiers,
       pizzaConfig: pizzaConfig,
-      notes: pizzaConfig.isSpecialPizza ? item.description : undefined
+      notes: pizzaConfig.isSpecialPizza ? item.description : undefined,
+      kitchenStations: item.kitchenStations
     };
 
     setCart(prev => [...prev, newCartItem]);
@@ -515,24 +701,55 @@ function App() {
       return acc + ((item.price + modTotal) * item.quantity);
     }, 0);
 
+    // ACTUALIZAR ACUMULADO PARA COMISIONES
+    if (isPaid) {
+      setSettings(prev => ({
+        ...prev,
+        lifetimeRevenueUSD: (prev.lifetimeRevenueUSD || 0) + cartTotal
+      }));
+    }
+
+    const existingReport = editingReportId ? reports.find(r => r.id === editingReportId) : null;
+
     const newReport: SaleRecord = {
       id: Math.random().toString(36).substr(2, 9),
       date: new Date().toISOString().split('T')[0],
       time: new Date().toLocaleTimeString(),
       tableNumber: parseInt(customerDetails.name) || 0,
-      waiter: currentUser?.name || 'Sistema',
+      waiter: existingReport ? existingReport.waiter : (currentUser?.name || 'Sistema'),
       total: cartTotal,
-      // Al guardar/confirmar el pedido, marcamos todos los items como servidos/procesados
-      order: cart.map(i => ({ ...i, isServed: true })),
+      order: cart.map(i => ({ ...i, isServed: i.isServed || false })),
       type: 'sale',
+      customerName: customerDetails.name,
+      createdAt: new Date().toISOString(),
       notes: isPaid ? customerDetails.paymentMethod : 'PENDIENTE',
-      customerName: customerDetails.name
+      auditNotes: []
     };
+
+    if (existingReport) {
+      newReport.id = existingReport.id;
+      newReport.createdAt = existingReport.createdAt || newReport.createdAt;
+      newReport.auditNotes = existingReport.auditNotes || [];
+
+      // Auditoría: si se eliminaron productos
+      const removedItems = existingReport.order.filter(old => !cart.some(curr => curr.id === old.id));
+      if (removedItems.length > 0) {
+        newReport.auditNotes = [
+          ...newReport.auditNotes,
+          ...removedItems.map(item => ({
+            timestamp: new Date().toISOString(),
+            user: currentUser?.name || 'Admin',
+            action: `Eliminó: ${item.quantity}x ${item.name}${removalReasons[item.id] ? ` (Motivo: ${removalReasons[item.id]})` : ''}`
+          }))
+        ];
+      }
+    }
 
     setReports(prev => {
       const filtered = editingReportId ? prev.filter(r => r.id !== editingReportId) : prev;
       return [newReport, ...filtered];
     });
+    syncSale(newReport);
 
     // Guardar para la pantalla de éxito antes de limpiar
     setLastSoldRecord({ cart: [...cart], details: { ...customerDetails } });
@@ -540,6 +757,8 @@ function App() {
     setCart([]);
     setEditingReportId(null);
     setCustomerDetails({ name: '', phone: '', paymentMethod: 'Efectivo', instructions: '' });
+    setCustomerDetails({ name: '', phone: '', paymentMethod: 'Efectivo', instructions: '' });
+    setRemovalReasons({});
     setCurrentView('success');
   };
 
@@ -608,8 +827,57 @@ function App() {
     }
 
     message += `*💳 Estado:* ${isUnpaid ? 'PENDIENTE' : customerDetails.paymentMethod}\n`;
-    window.open(`https://wa.me/${settings.targetNumber}?text=${encodeURIComponent(message)}`, '_blank');
+
+    if (settings.isWhatsAppEnabled) {
+      window.open(`https://wa.me/${settings.targetNumber}?text=${encodeURIComponent(message)}`, '_blank');
+    } else {
+      console.log("WhatsApp desactivado por configuración. Pedido:", message);
+      alert("✅ Pedido registrado exitosamente (Envío a Cocina por WhatsApp desactivado)");
+    }
   };
+
+  // --- BLOQUEO POR VENCIMIENTO ---
+  if (isSubscriptionInactive) {
+    const isActuallyExpired = settings.isLicenseActive && settings.licenseExpiryDate && new Date() > new Date(settings.licenseExpiryDate);
+
+    return (
+      <div className="fixed inset-0 z-[1000] bg-black flex flex-col items-center justify-center p-8 text-center bg-cover bg-center" style={{ backgroundImage: 'linear-gradient(rgba(0,0,0,0.95), rgba(0,0,0,0.98)), url(https://images.unsplash.com/photo-1543353071-087092ec393a?q=80&w=2070&auto=format&fit=crop)' }}>
+        <div className="w-24 h-24 bg-[#111] rounded-3xl p-3 mx-auto mb-6 shadow-2xl border border-[#FF0000]/30 flex flex-col items-center justify-center">
+          <div className="text-2xl font-black uppercase tracking-tighter flex items-center">
+            <span className="text-[#FF0000]">Ke</span>
+            <span className="text-[#FFD700]">click</span>
+          </div>
+        </div>
+        <h2 className="text-3xl font-black text-white uppercase tracking-tight mb-2">
+          {isActuallyExpired ? 'Suscripción Agotada' : 'Periodo de Prueba Vencido'}
+        </h2>
+        <p className="text-gray-400 text-sm mb-10 max-w-[280px]">
+          {isActuallyExpired
+            ? `Tu plan profesional ha finalizado el ${new Date(settings.licenseExpiryDate!).toLocaleDateString()}. Renueva para seguir facturando.`
+            : 'Tu periodo de cortesía de 5 días ha finalizado. Activa tu licencia para continuar con la gestión de tu negocio.'
+          }
+        </p>
+
+        <div className="space-y-4 w-full max-w-xs">
+          <button
+            onClick={() => window.open(`https://wa.me/584120000000?text=${encodeURIComponent(`Hola, mi sistema Keclick (${settings.businessName}) ha vencido. Deseo renovar mi suscripción.`)}`, '_blank')}
+            className="w-full py-5 bg-[#FF0000] text-white font-black rounded-2xl uppercase tracking-widest shadow-xl shadow-red-900/20 active:scale-95 transition-all"
+          >
+            Solicitar Activación
+          </button>
+          <button
+            onClick={() => window.location.reload()}
+            className="w-full py-3 bg-white/10 text-white font-bold rounded-2xl uppercase text-[10px] tracking-widest border border-white/5"
+          >
+            Refrescar Estado
+          </button>
+        </div>
+        <p className="mt-12 text-[8px] font-black text-gray-600 uppercase tracking-widest leading-none">
+          {settings.businessName} • ID: {settings.storeId}
+        </p>
+      </div>
+    );
+  }
 
   if (!isAppReady) return <SplashScreen onEnter={() => setIsAppReady(true)} />;
 
@@ -617,7 +885,12 @@ function App() {
     return (
       <LoginScreen
         users={settings.users}
-        onLogin={(user) => setCurrentUser(user)}
+        onLogin={(user) => {
+          setCurrentUser(user);
+          if (user.role === 'cocinero') {
+            setCurrentView('kitchen');
+          }
+        }}
         businessName={businessName}
         businessLogo={businessLogo}
       />
@@ -648,79 +921,197 @@ function App() {
     <>
       <div className="h-full w-full bg-black p-2 box-border">
         <div className="h-full w-full bg-white rounded-[38px] flex flex-col relative overflow-hidden" style={{ backgroundColor: 'var(--page-bg-color)' }}>
-          <div className="bg-white border-b px-4 py-3 flex justify-around items-center shrink-0">
-            <button onClick={() => setCurrentView('menu')} className={`flex flex-col items-center gap-1 ${currentView === 'menu' ? 'text-brand' : 'text-gray-400'}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-              <span className="text-[10px] font-bold uppercase">Menú</span>
-            </button>
-            <button onClick={() => setCurrentView('reports')} className={`flex flex-col items-center gap-1 ${currentView === 'reports' ? 'text-brand' : 'text-gray-400'}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-              <span className="text-[10px] font-bold uppercase">Ventas</span>
-            </button>
-            <button onClick={() => setCurrentView('settings')} className={`flex flex-col items-center gap-1 ${currentView === 'settings' ? 'text-brand' : 'text-gray-400'}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor"><path d="M 10.490234 2 C 10.011234 2 9.6017656 2.3385938 9.5097656 2.8085938 L 9.1757812 4.5234375 C 8.3550224 4.8338012 7.5961042 5.2674041 6.9296875 5.8144531 L 5.2851562 5.2480469 C 4.8321563 5.0920469 4.33375 5.2793594 4.09375 5.6933594 L 2.5859375 8.3066406 C 2.3469375 8.7216406 2.4339219 9.2485 2.7949219 9.5625 L 4.1132812 10.708984 C 4.0447181 11.130337 4 11.559284 4 12 C 4 12.440716 4.0447181 12.869663 4.1132812 13.291016 L 2.7949219 14.4375 C 2.4339219 14.7515 2.3469375 15.278359 2.5859375 15.693359 L 4.09375 18.306641 C 4.33275 18.721641 4.8321562 18.908906 5.2851562 18.753906 L 6.9296875 18.1875 C 7.5958842 18.734206 8.3553934 19.166339 9.1757812 19.476562 L 9.5097656 21.191406 C 9.6017656 21.661406 10.011234 22 10.490234 22 L 13.509766 22 C 13.988766 22 14.398234 21.661406 14.490234 21.191406 L 14.824219 19.476562 C 15.644978 19.166199 16.403896 18.732596 17.070312 18.185547 L 18.714844 18.751953 C 19.167844 18.907953 19.66625 18.721641 19.90625 18.306641 L 21.414062 15.691406 C 21.653063 15.276406 21.566078 14.7515 21.205078 14.4375 L 19.886719 13.291016 C 19.955282 12.869663 20 12 C 20 11.559284 19.955282 11.130337 19.886719 10.708984 L 21.205078 9.5625 C 21.566078 9.2485 21.653063 8.7216406 21.414062 8.3066406 L 19.90625 5.6933594 C 19.66725 5.2783594 19.167844 5.0910937 18.714844 5.2460938 L 17.070312 5.8125 C 16.404116 5.2657937 15.644607 4.8336609 14.824219 4.5234375 L 14.490234 2.8085938 C 14.398234 2.3385937 13.988766 2 13.509766 2 L 10.490234 2 z M 12 8 C 14.209 8 16 9.791 16 12 C 16 14.209 14.209 16 12 16 C 9.791 16 8 14.209 8 12 C 8 9.791 9.791 8 12 8 z" /></svg>
-              <span className="text-[10px] font-bold uppercase">Ajustes</span>
-            </button>
-            <button onClick={handleLogout} className="flex flex-col items-center gap-1 text-red-500">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-              <span className="text-[10px] font-bold uppercase">Salir</span>
-            </button>
-          </div>
+          {currentView !== 'kitchen' && (
+            <div className="bg-white border-b px-4 py-3 flex justify-around items-center shrink-0">
+              <button onClick={() => setCurrentView('menu')} className={`flex flex-col items-center gap-1 ${currentView === 'menu' ? 'text-brand' : 'text-gray-400'}`}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                <span className="text-[10px] font-bold uppercase">Menú</span>
+              </button>
+              <button onClick={() => setCurrentView('reports')} className={`flex flex-col items-center gap-1 relative ${currentView === 'reports' ? 'text-brand' : 'text-gray-400'}`}>
+                {hasReadyPlates && (
+                  <span className="absolute -top-1 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white animate-bounce shadow-lg shadow-green-200"></span>
+                )}
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                <span className="text-[10px] font-bold uppercase">Ventas</span>
+              </button>
+              <button onClick={() => setCurrentView('settings')} className={`flex flex-col items-center gap-1 ${currentView === 'settings' ? 'text-brand' : 'text-gray-400'}`}>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor"><path d="M 10.490234 2 C 10.011234 2 9.6017656 2.3385938 9.5097656 2.8085938 L 9.1757812 4.5234375 C 8.3550224 4.8338012 7.5961042 5.2674041 6.9296875 5.8144531 L 5.2851562 5.2480469 C 4.8321563 5.0920469 4.33375 5.2793594 4.09375 5.6933594 L 2.5859375 8.3066406 C 2.3469375 8.7216406 2.4339219 9.2485 2.7949219 9.5625 L 4.1132812 10.708984 C 4.0447181 11.130337 4 11.559284 4 12 C 4 12.440716 4.0447181 12.869663 4.1132812 13.291016 L 2.7949219 14.4375 C 2.4339219 14.7515 2.3469375 15.278359 2.5859375 15.693359 L 4.09375 18.306641 C 4.33275 18.721641 4.8321562 18.908906 5.2851562 18.753906 L 6.9296875 18.1875 C 7.5958842 18.734206 8.3553934 19.166339 9.1757812 19.476562 L 9.5097656 21.191406 C 9.6017656 21.661406 10.011234 22 10.490234 22 L 13.509766 22 C 13.988766 22 14.398234 21.661406 14.490234 21.191406 L 14.824219 19.476562 C 15.644978 19.166199 16.403896 18.732596 17.070312 18.185547 L 18.714844 18.751953 C 19.167844 18.907953 19.66625 18.721641 19.90625 18.306641 L 21.414062 15.691406 C 21.653063 15.276406 21.566078 14.7515 21.205078 14.4375 L 19.886719 13.291016 C 19.955282 12.869663 20 12 C 20 11.559284 19.955282 11.130337 19.886719 10.708984 L 21.205078 9.5625 C 21.566078 9.2485 21.653063 8.7216406 21.414062 8.3066406 L 19.90625 5.6933594 C 19.66725 5.2783594 19.167844 5.0910937 18.714844 5.2460938 L 17.070312 5.8125 C 16.404116 5.2657937 15.644607 4.8336609 14.824219 4.5234375 L 14.490234 2.8085938 C 14.398234 2.3385937 13.988766 2 13.509766 2 L 10.490234 2 z M 12 8 C 14.209 8 16 9.791 16 12 C 16 14.209 14.209 16 12 16 C 9.791 16 8 14.209 8 12 C 8 9.791 9.791 8 12 8 z" /></svg>
+                <span className="text-[10px] font-bold uppercase">Ajustes</span>
+              </button>
+              {currentUser?.role === 'admin' && (
+                <button onClick={() => setCurrentView('dashboard')} className={`flex flex-col items-center gap-1 ${currentView === 'dashboard' ? 'text-brand' : 'text-gray-400'}`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg>
+                  <span className="text-[10px] font-bold uppercase">Maestro</span>
+                </button>
+              )}
+              <button onClick={handleLogout} className="flex flex-col items-center gap-1 text-red-500">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                <span className="text-[10px] font-bold uppercase">Salir</span>
+              </button>
+            </div>
+          )}
 
-          <div className="flex-1 overflow-hidden">
-            {(() => {
-              switch (currentView) {
-                case 'menu': return <MenuScreen menu={menu} cart={cart} onAddItem={handleAddItem} onUpdateQuantity={handleUpdateQuantity} onRemoveItem={handleRemoveItem} onClearCart={handleClearCart} cartItemCount={cart.reduce((acc, item) => acc + item.quantity, 0)} onOpenModifierModal={setModifierModalItem} onOpenPizzaBuilder={setPizzaBuilderItem} onGoToCart={() => setCurrentView('cart')} businessName={businessName} businessLogo={businessLogo} triggerShake={triggerCartShake} showInstallButton={showInstallBtn} onInstallApp={handleInstallClick} activeRate={activeRate} isEditing={!!editingReportId} theme={theme} />;
-                case 'cart': return <CartScreen cart={cart} onUpdateQuantity={handleUpdateQuantity} onRemoveItem={handleRemoveItem} onClearCart={handleClearCart} onBackToMenu={() => setCurrentView('menu')} onGoToCheckout={() => setCurrentView('checkout')} onEditItem={(id) => { const item = cart.find(i => i.id === id); if (item) { setEditingCartItemId(id); for (const cat of menu) { const original = cat.items.find(i => i.name === item.name); if (original) { setModifierModalItem(original); break; } } } }} activeRate={activeRate} isEditing={!!editingReportId} />;
-                case 'checkout': return <CheckoutScreen cart={cart} customerDetails={customerDetails} paymentMethods={['Efectivo', 'Pago Móvil', 'Zelle', 'Divisas']} onUpdateDetails={setCustomerDetails} onBack={() => setCurrentView('cart')} onSubmitOrder={() => setConfirmOrderModalOpen(true)} onEditUserDetails={handleLogout} onClearCart={handleClearCart} activeRate={activeRate} isEditing={!!editingReportId} />;
-                case 'settings': {
-                  return <SettingsScreen
-                    settings={settings}
-                    onSaveSettings={setSettings}
-                    onGoToTables={() => setCurrentView('menu')}
-                    waiter={currentUser?.name || ''}
-                    onLogout={handleLogout}
-                    waiterAssignments={{}}
-                    onSaveAssignments={{}}
-                    storeProfiles={memoizedProfiles}
-                    onUpdateStoreProfiles={(profiles) => {
-                      const p = Array.isArray(profiles) ? profiles[0] : (typeof profiles === 'function' ? profiles([])[0] : null);
-                      if (p) {
-                        setBusinessName(p.name);
-                        setMenu(p.menu);
-                        setModifierGroups(p.modifierGroups);
-                        setTheme(p.theme);
-                        setSettings(prev => ({ ...prev, targetNumber: p.whatsappNumber }));
-                      }
-                    }}
-                    activeTableNumbers={[]}
-                    onBackupAllSalesData={() => { }}
-                    onClearAllSalesData={() => {
-                      if (window.confirm("¿Borrar definitivamente todo el historial?")) {
-                        setReports([]);
-                      }
-                    }}
-                    onConnectPrinter={handleConnectPrinter}
-                    onDisconnectPrinter={handleDisconnectPrinter}
-                    isPrinterConnected={isPrinterConnected}
-                    printerName={printerDevice?.name}
-                    onPrintTest={handlePrintTest}
-                    pizzaIngredients={pizzaIngredients}
-                    pizzaBasePrices={pizzaBasePrices}
-                    onUpdatePizzaConfig={(ingredients, basePrices) => {
-                      setPizzaIngredients(ingredients);
-                      setPizzaBasePrices(basePrices);
-                    }}
-                  />;
-                }
-                case 'reports': return <ReportsScreen reports={reports} dayClosures={dayClosures} onGoToTables={() => setCurrentView('menu')} onDeleteReports={(ids) => { setReports(prev => prev.filter(r => !ids.includes(r.id))); return true; }} settings={settings} onStartNewDay={handleStartNewDay} currentWaiter={currentUser?.name || ''} onOpenSalesHistory={() => setIsSalesHistoryModalOpen(true)} onReprintSaleRecord={handleReprintSaleRecord} isPrinterConnected={isPrinterConnected} onEditPendingReport={handleEditPendingReport} onVoidReport={handleVoidReport} isAdmin={currentUser?.role === 'admin'} />;
-                case 'success': return <SuccessScreen cart={lastSoldRecord?.cart || []} customerDetails={lastSoldRecord?.details || customerDetails} onStartNewOrder={handleStartNewOrder} onReprint={() => handlePrintOrder(undefined, true)} isPrinterConnected={isPrinterConnected} activeRate={activeRate} />;
-                default: return null;
+
+          {/* Notificación de Platos EN PREPARACIÓN (Amarillo) */}
+          {/* Notificación de Platos EN PREPARACIÓN (Amarillo - Tipo Carrusel) */}
+          {currentUser && currentUser.role === 'mesero' && hasPreparingPlates && currentView !== 'kitchen' && (
+            <div className="bg-amber-500 text-white py-2 px-4 shadow-lg animate-in slide-in-from-top duration-500 z-[100] shrink-0 border-b border-amber-600 flex items-center justify-between gap-3 overflow-hidden">
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="flex h-6 w-6 items-center justify-center bg-white text-amber-600 rounded-full animate-pulse">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </span>
+                <span className="text-[10px] font-black uppercase tracking-tighter text-amber-50">COCINANDO...</span>
+              </div>
+
+              <div className="flex-1 overflow-hidden flex items-center gap-3">
+                <div className="animate-marquee whitespace-nowrap text-xs font-bold uppercase italic tracking-widest min-w-[100px] text-white">
+                  {preparingPlatesDetails.map((item, idx) => (
+                    <span key={idx} className="mr-8">
+                      🔥 {item.itemName} ({item.table})
+                    </span>
+                  ))}
+                </div>
+              </div>
+              {/* No botón de acción para estado 'preparando', solo informativo */}
+            </div>
+          )}
+
+          {/* Notificación de Platos Listos (Existente - Verde) */}
+          {currentUser && currentUser.role === 'mesero' && hasReadyPlates && currentView !== 'kitchen' && (
+            <div className="bg-green-600 text-white py-2 px-4 shadow-lg animate-in slide-in-from-top duration-500 z-[100] shrink-0 border-b border-green-700 flex items-center justify-between gap-3 overflow-hidden">
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="flex h-6 w-6 items-center justify-center bg-white text-green-600 rounded-full animate-bounce">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </span>
+                <span className="text-[10px] font-black uppercase tracking-tighter">¡IR A COCINA!</span>
+              </div>
+
+              <div className="flex-1 overflow-hidden flex items-center gap-3">
+                <div className="animate-marquee whitespace-nowrap text-xs font-bold uppercase italic tracking-widest min-w-[100px]">
+                  {readyPlatesDetails.map((item, idx) => (
+                    <span key={idx} className="mr-8">
+                      🍴 {item.itemName} ({item.table})
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={(e) => { e.stopPropagation(); handleMarkAllServed(); }}
+                className="bg-white text-green-700 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase shadow-lg active:scale-90 transition-transform whitespace-nowrap border border-green-500 shrink-0"
+              >
+                ENTREGADO ✓
+              </button>
+
+              <style>{`
+                  @keyframes marquee {
+                    0% { transform: translateX(100%); }
+                    100% { transform: translateX(-100%); }
+                  }
+                  .animate-marquee {
+                    display: inline-block;
+                    animation: marquee 15s linear infinite;
+                  }
+                `}</style>
+            </div>
+          )}
+          {(() => {
+            switch (currentView) {
+              case 'menu': return <MenuScreen menu={menu} cart={cart} onAddItem={handleAddItem} onUpdateQuantity={handleUpdateQuantity} onRemoveItem={handleRemoveItem} onClearCart={handleClearCart} cartItemCount={cart.reduce((acc, item) => acc + item.quantity, 0)} onOpenModifierModal={setModifierModalItem} onOpenPizzaBuilder={setPizzaBuilderItem} onGoToCart={() => setCurrentView('cart')} businessName={businessName} businessLogo={businessLogo} triggerShake={triggerCartShake} showInstallButton={showInstallBtn} onInstallApp={handleInstallClick} activeRate={activeRate} isEditing={!!editingReportId} theme={theme} />;
+              case 'cart': return <CartScreen cart={cart} onUpdateQuantity={handleUpdateQuantity} onRemoveItem={handleRemoveItem} onClearCart={handleClearCart} onBackToMenu={() => setCurrentView('menu')} onGoToCheckout={() => setCurrentView('checkout')} onEditItem={(id) => { const item = cart.find(i => i.id === id); if (item) { setEditingCartItemId(id); for (const cat of menu) { const original = cat.items.find(i => i.name === item.name); if (original) { setModifierModalItem(original); break; } } } }} activeRate={activeRate} isEditing={!!editingReportId} isAdmin={currentUser?.role === 'admin'} />;
+              case 'checkout': return <CheckoutScreen cart={cart} customerDetails={customerDetails} paymentMethods={['Efectivo', 'Pago Móvil', 'Zelle', 'Divisas']} onUpdateDetails={setCustomerDetails} onBack={() => setCurrentView('cart')} onSubmitOrder={() => setConfirmOrderModalOpen(true)} onEditUserDetails={handleLogout} onClearCart={handleClearCart} activeRate={activeRate} isEditing={!!editingReportId} />;
+              case 'settings': {
+                return <SettingsScreen
+                  settings={settings}
+                  onSaveSettings={(s) => {
+                    setSettings(s);
+                    syncSettings(s as AppSettings);
+                  }}
+                  onGoToTables={() => setCurrentView('menu')}
+                  waiter={currentUser?.name || ''}
+                  onLogout={handleLogout}
+                  waiterAssignments={{}}
+                  onSaveAssignments={{}}
+                  storeProfiles={memoizedProfiles}
+                  onUpdateStoreProfiles={(profiles) => {
+                    const p = Array.isArray(profiles) ? profiles[0] : (typeof profiles === 'function' ? profiles([])[0] : null);
+                    if (p) {
+                      setBusinessName(p.name);
+                      setMenu(p.menu);
+                      setModifierGroups(p.modifierGroups);
+                      setTheme(p.theme);
+                      // Eliminamos el setSettings de aquí ya que SettingsScreen ya se encarga 
+                      // de enviar el objeto de settings completo y actualizado.
+                    }
+                  }}
+                  activeTableNumbers={[]}
+                  onBackupAllSalesData={() => { }}
+                  onClearAllSalesData={() => {
+                    if (window.confirm("¿Borrar definitivamente todo el historial?")) {
+                      setReports([]);
+                    }
+                  }}
+                  onConnectPrinter={handleConnectPrinter}
+                  onDisconnectPrinter={handleDisconnectPrinter}
+                  isPrinterConnected={isPrinterConnected}
+                  printerName={printerDevice?.name}
+                  onPrintTest={handlePrintTest}
+                  pizzaIngredients={pizzaIngredients}
+                  pizzaBasePrices={pizzaBasePrices}
+                  onUpdatePizzaConfig={(ingredients, basePrices) => {
+                    setPizzaIngredients(ingredients);
+                    setPizzaBasePrices(basePrices);
+                  }}
+                />;
               }
-            })()}
-          </div>
+              case 'reports': return <ReportsScreen reports={reports} dayClosures={dayClosures} onGoToTables={() => setCurrentView('menu')} onDeleteReports={(ids) => { setReports(prev => prev.filter(r => !ids.includes(r.id))); return true; }} settings={settings} onStartNewDay={handleStartNewDay} currentWaiter={currentUser?.name || ''} onOpenSalesHistory={() => setIsSalesHistoryModalOpen(true)} onReprintSaleRecord={handleReprintSaleRecord} isPrinterConnected={isPrinterConnected} onEditPendingReport={handleEditPendingReport} onVoidReport={handleVoidReport} isAdmin={currentUser?.role === 'admin'} />;
+              case 'dashboard': return <AdminDashboard reports={reports} settings={settings} onGoToView={(v) => setCurrentView(v)} onEditOrder={handleEditPendingReport} onVoidOrder={handleVoidReport} onReprintOrder={handleReprintSaleRecord} isPrinterConnected={isPrinterConnected} />;
+              case 'kitchen': return <KitchenScreen
+                reports={reports}
+                settings={settings}
+                currentUser={currentUser}
+                onUpdateItemStatus={(reportId, itemId, stationId, status) => {
+                  let updatedReportToSync: SaleRecord | null = null;
+                  const updatedReports = reports.map(r => {
+                    if (r.id !== reportId) return r;
+                    const updated = {
+                      ...r,
+                      order: r.order.map((item: any) => {
+                        if (item.id !== itemId) return item;
+                        const currentStatus = item.kitchenStatus || {};
+                        return {
+                          ...item,
+                          kitchenStatus: { ...currentStatus, [stationId]: status }
+                        };
+                      })
+                    };
+                    updatedReportToSync = updated;
+                    return updated;
+                  });
+                  setReports(updatedReports);
+                  if (updatedReportToSync) syncSale(updatedReportToSync);
+                }}
+                onCloseOrder={(reportId) => {
+                  if (window.confirm("¿Dar por terminada esta comanda?")) {
+                    const updatedReports = reports.map(r => r.id === reportId ? { ...r, closed: true } : r);
+                    setReports(updatedReports);
+                    const closedReport = updatedReports.find(r => r.id === reportId);
+                    if (closedReport) syncSale(closedReport);
+                  }
+                }}
+                onLogout={handleLogout}
+              />;
+              case 'success': return <SuccessScreen cart={lastSoldRecord?.cart || []} customerDetails={lastSoldRecord?.details || customerDetails} onStartNewOrder={handleStartNewOrder} onReprint={() => handlePrintOrder(undefined, true)} isPrinterConnected={isPrinterConnected} activeRate={activeRate} />;
+              default: return null;
+            }
+          })()}
         </div>
       </div>
+
 
       {modifierModalItem && (
         <ProductModifierModal
@@ -739,141 +1130,159 @@ function App() {
           }}
           activeRate={activeRate}
         />
-      )}
+      )
+      }
 
-      {pizzaBuilderItem && (
-        <PizzaBuilderModal
-          item={pizzaBuilderItem}
-          onClose={() => setPizzaBuilderItem(null)}
-          onSubmit={handleAddPizzaToCart}
-          activeRate={activeRate}
-          isSpecialPizza={pizzaBuilderItem.isSpecialPizza || false}
-          defaultIngredients={pizzaBuilderItem.defaultIngredients || []}
-          pizzaIngredients={pizzaIngredients}
-          pizzaBasePrices={pizzaBasePrices}
-          allModifierGroups={modifierGroups}
-        />
-      )}
+      {
+        pizzaBuilderItem && (
+          <PizzaBuilderModal
+            item={pizzaBuilderItem}
+            onClose={() => setPizzaBuilderItem(null)}
+            onSubmit={handleAddPizzaToCart}
+            activeRate={activeRate}
+            isSpecialPizza={pizzaBuilderItem.isSpecialPizza || false}
+            defaultIngredients={pizzaBuilderItem.defaultIngredients || []}
+            pizzaIngredients={pizzaIngredients}
+            pizzaBasePrices={pizzaBasePrices}
+            allModifierGroups={modifierGroups}
+          />
+        )
+      }
 
-      {isConfirmOrderModalOpen && (
-        <ConfirmOrderModal
-          isOpen={isConfirmOrderModalOpen}
-          onClose={() => setConfirmOrderModalOpen(false)}
-          isPrinterConnected={isPrinterConnected}
-          isEdit={!!editingReportId}
-          onConfirmPrintAndSend={async () => {
-            if (isPrinterConnected) await handlePrintOrder();
-            executeSendToWhatsapp();
-            finalizeOrder(true);
-            setConfirmOrderModalOpen(false);
-          }}
-          onConfirmPrintOnly={async () => {
-            if (isPrinterConnected) await handlePrintOrder();
-            finalizeOrder(true);
-            setConfirmOrderModalOpen(false);
-          }}
-          onConfirmSendOnly={() => {
-            executeSendToWhatsapp();
-            finalizeOrder(true);
-            setConfirmOrderModalOpen(false);
-          }}
-          onConfirmSendUnpaid={async () => {
-            if (isPrinterConnected) await handlePrintOrder("POR COBRAR");
-            executeSendToWhatsapp(true);
-            finalizeOrder(false);
-            setConfirmOrderModalOpen(false);
-          }}
-          userRole={currentUser?.role || 'mesero'}
-          waitersCanCharge={settings.waitersCanCharge}
-        />
-      )}
+      {
+        isConfirmOrderModalOpen && (
+          <ConfirmOrderModal
+            isOpen={isConfirmOrderModalOpen}
+            onClose={() => setConfirmOrderModalOpen(false)}
+            isPrinterConnected={isPrinterConnected}
+            isEdit={!!editingReportId}
+            onConfirmPrintAndSend={async () => {
+              if (isPrinterConnected) await handlePrintOrder();
+              executeSendToWhatsapp();
+              finalizeOrder(true);
+              setConfirmOrderModalOpen(false);
+            }}
+            onConfirmPrintOnly={async () => {
+              if (isPrinterConnected) await handlePrintOrder();
+              finalizeOrder(true);
+              setConfirmOrderModalOpen(false);
+            }}
+            onConfirmSendOnly={() => {
+              executeSendToWhatsapp();
+              finalizeOrder(true);
+              setConfirmOrderModalOpen(false);
+            }}
+            onConfirmSendUnpaid={async () => {
+              if (isPrinterConnected) await handlePrintOrder("POR COBRAR");
+              executeSendToWhatsapp(true);
+              finalizeOrder(false);
+              setConfirmOrderModalOpen(false);
+            }}
+            userRole={currentUser?.role || 'mesero'}
+            waitersCanCharge={settings.waitersCanCharge}
+          />
+        )
+      }
 
-      {isSalesHistoryModalOpen && (
-        <SalesHistoryModal reports={reports} onClose={() => setIsSalesHistoryModalOpen(false)} />
-      )}
+      {
+        isSalesHistoryModalOpen && (
+          <SalesHistoryModal reports={reports} onClose={() => setIsSalesHistoryModalOpen(false)} />
+        )
+      }
 
-      {pendingVoidReportId && (
-        <AdminAuthModal
-          validPins={settings.users.filter(u => u.role === 'admin').map(u => u.pin)}
-          onClose={() => setPendingVoidReportId(null)}
-          onSuccess={executeVoidReport}
-          title="Anular Ticket"
-        />
-      )}
+      {
+        pendingVoidReportId && (
+          <AdminAuthModal
+            validPins={settings.users.filter(u => u.role === 'admin').map(u => u.pin)}
+            onClose={() => setPendingVoidReportId(null)}
+            onSuccess={executeVoidReport}
+            title="Anular Ticket"
+          />
+        )
+      }
 
-      {isAdminAuthForClearCart && (
-        <AdminAuthModal
-          validPins={settings.users.filter(u => u.role === 'admin').map(u => u.pin)}
-          onClose={() => setIsAdminAuthForClearCart(false)}
-          onSuccess={executeClearCart}
-          title="Eliminar Pedido Completo"
-        />
-      )}
+      {
+        isAdminAuthForClearCart && (
+          <AdminAuthModal
+            validPins={settings.users.filter(u => u.role === 'admin').map(u => u.pin)}
+            onClose={() => setIsAdminAuthForClearCart(false)}
+            onSuccess={executeClearCart}
+            title="Eliminar Pedido Completo"
+          />
+        )
+      }
 
-      {pendingRemoveItemId && (
-        <AdminAuthModal
-          validPins={settings.users.filter(u => u.role === 'admin').map(u => u.pin)}
-          onClose={() => setPendingRemoveItemId(null)}
-          onSuccess={executeRemoveItem}
-          title="Eliminar Producto del Pedido"
-        />
-      )}
+      {
+        pendingRemoveItemId && (
+          <AdminAuthModal
+            validPins={settings.users.filter(u => u.role === 'admin').map(u => u.pin)}
+            onClose={() => setPendingRemoveItemId(null)}
+            onSuccess={executeRemoveItem}
+            title="Eliminar Producto del Pedido"
+            requireReason={!!(pendingRemoveItemId && cart.find(i => i.id === pendingRemoveItemId)?.isServed)}
+          />
+        )
+      }
 
-      {showInstallModal && (
-        <InstallPromptModal
-          isOpen={showInstallModal}
-          onClose={() => setShowInstallModal(false)}
-          onInstall={triggerNativeInstall}
-          platform={platform}
-        />
-      )}
+      {
+        showInstallModal && (
+          <InstallPromptModal
+            isOpen={showInstallModal}
+            onClose={() => setShowInstallModal(false)}
+            onInstall={triggerNativeInstall}
+            platform={platform}
+          />
+        )
+      }
 
       {/* ÁREA DE IMPRESIÓN PARA NAVEGADOR (OCULTA) */}
-      {receiptToPrint && (
-        <div id="printable-receipt" className="p-4 bg-white text-black font-mono text-[12px]">
-          <div className="text-center font-black text-lg uppercase mb-2 border-b-2 border-dashed border-black pb-2">
-            {businessName}
-          </div>
-          <div className="text-center font-bold mb-4">
-            {receiptToPrint.title || 'RECIBO DE PEDIDO'}
-          </div>
-          <div className="space-y-1 mb-4">
-            <div className="flex justify-between"><span>FECHA:</span> <span>{new Date().toLocaleDateString()}</span></div>
-            <div className="flex justify-between"><span>HORA:</span> <span>{new Date().toLocaleTimeString()}</span></div>
-            <div className="flex justify-between"><span>MESERO:</span> <span>{receiptToPrint.waiter}</span></div>
-            <div className="flex justify-between"><span>REF:</span> <span>{receiptToPrint.customer.name}</span></div>
-          </div>
-          <div className="border-b border-dashed border-black my-2"></div>
-          <div className="space-y-3">
-            {receiptToPrint.cart.map((item, idx) => (
-              <div key={idx} className="flex flex-col">
-                <div className="flex justify-between font-bold">
-                  <span>{item.quantity}X {item.name}</span>
-                  <span>${((item.price + item.selectedModifiers.reduce((acc, m) => acc + m.option.price, 0)) * item.quantity).toFixed(2)}</span>
-                </div>
-                {item.selectedModifiers.map((mod, midx) => (
-                  <div key={midx} className="text-[10px] ml-2 italic">
-                    - {mod.option.name}
+      {
+        receiptToPrint && (
+          <div id="printable-receipt" className="p-4 bg-white text-black font-mono text-[12px]">
+            <div className="text-center font-black text-lg uppercase mb-2 border-b-2 border-dashed border-black pb-2">
+              {businessName}
+            </div>
+            <div className="text-center font-bold mb-4">
+              {receiptToPrint.title || 'RECIBO DE PEDIDO'}
+            </div>
+            <div className="space-y-1 mb-4">
+              <div className="flex justify-between"><span>FECHA:</span> <span>{new Date().toLocaleDateString()}</span></div>
+              <div className="flex justify-between"><span>HORA:</span> <span>{new Date().toLocaleTimeString()}</span></div>
+              <div className="flex justify-between"><span>MESERO:</span> <span>{receiptToPrint.waiter}</span></div>
+              <div className="flex justify-between"><span>REF:</span> <span>{receiptToPrint.customer.name}</span></div>
+            </div>
+            <div className="border-b border-dashed border-black my-2"></div>
+            <div className="space-y-3">
+              {receiptToPrint.cart.map((item, idx) => (
+                <div key={idx} className="flex flex-col">
+                  <div className="flex justify-between font-bold">
+                    <span>{item.quantity}X {item.name}</span>
+                    <span>${((item.price + item.selectedModifiers.reduce((acc, m) => acc + m.option.price, 0)) * item.quantity).toFixed(2)}</span>
                   </div>
-                ))}
+                  {item.selectedModifiers.map((mod, midx) => (
+                    <div key={midx} className="text-[10px] ml-2 italic">
+                      - {mod.option.name}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <div className="border-t-2 border-dashed border-black mt-4 pt-2">
+              <div className="flex justify-between text-lg font-black">
+                <span>TOTAL:</span>
+                <span>${receiptToPrint.cart.reduce((acc, item) => acc + ((item.price + item.selectedModifiers.reduce((s, m) => s + m.option.price, 0)) * item.quantity), 0).toFixed(2)}</span>
               </div>
-            ))}
-          </div>
-          <div className="border-t-2 border-dashed border-black mt-4 pt-2">
-            <div className="flex justify-between text-lg font-black">
-              <span>TOTAL:</span>
-              <span>${receiptToPrint.cart.reduce((acc, item) => acc + ((item.price + item.selectedModifiers.reduce((s, m) => s + m.option.price, 0)) * item.quantity), 0).toFixed(2)}</span>
+              <div className="flex justify-between text-sm mt-1">
+                <span>METODO:</span>
+                <span>{receiptToPrint.customer.paymentMethod}</span>
+              </div>
             </div>
-            <div className="flex justify-between text-sm mt-1">
-              <span>METODO:</span>
-              <span>{receiptToPrint.customer.paymentMethod}</span>
+            <div className="text-center mt-6 text-[10px]">
+              ¡GRACIAS POR SU COMPRA!
             </div>
           </div>
-          <div className="text-center mt-6 text-[10px]">
-            ¡GRACIAS POR SU COMPRA!
-          </div>
-        </div>
-      )}
+        )
+      }
     </>
   );
 }

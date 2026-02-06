@@ -1,14 +1,15 @@
 
 import React, { useState } from 'react';
-import { User, UserRole } from '../types';
+import { User, UserRole, KitchenStation } from '../types';
 
 interface UserManagementModalProps {
     users: User[];
+    kitchenStations: KitchenStation[];
     onSave: (users: User[]) => void;
     onClose: () => void;
 }
 
-const UserManagementModal: React.FC<UserManagementModalProps> = ({ users, onSave, onClose }) => {
+const UserManagementModal: React.FC<UserManagementModalProps> = ({ users, kitchenStations, onSave, onClose }) => {
     const [localUsers, setLocalUsers] = useState<User[]>(JSON.parse(JSON.stringify(users)));
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [isFormOpen, setFormOpen] = useState(false);
@@ -16,12 +17,14 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ users, onSave
     const [name, setName] = useState('');
     const [pin, setPin] = useState('');
     const [role, setRole] = useState<UserRole>('mesero');
+    const [selectedStation, setSelectedStation] = useState<string>('');
 
     const handleEdit = (user: User) => {
         setEditingUser(user);
         setName(user.name);
         setPin(user.pin);
         setRole(user.role);
+        setSelectedStation(user.kitchenStation || '');
         setFormOpen(true);
     };
 
@@ -30,6 +33,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ users, onSave
         setName('');
         setPin('');
         setRole('mesero');
+        setSelectedStation('');
         setFormOpen(true);
     };
 
@@ -54,7 +58,8 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ users, onSave
             id: editingUser ? editingUser.id : Math.random().toString(36).substr(2, 9),
             name: name.trim(),
             pin: pin,
-            role: role
+            role: role,
+            kitchenStation: role === 'cocinero' ? selectedStation : undefined
         };
 
         setLocalUsers(prev => {
@@ -138,13 +143,28 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ users, onSave
                             <div>
                                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Rol en el Sistema</label>
                                 <div className="flex gap-2">
-                                    {['admin', 'mesero', 'cajero'].map(r => (
+                                    {['admin', 'mesero', 'cajero', 'cocinero'].map(r => (
                                         <button key={r} type="button" onClick={() => setRole(r as UserRole)} className={`flex-1 py-4 rounded-2xl font-black uppercase text-[10px] border-2 transition-all ${role === r ? 'border-red-500 bg-red-50 text-red-600 shadow-lg shadow-red-100' : 'border-gray-100 bg-white text-gray-400'}`}>
                                             {r}
                                         </button>
                                     ))}
                                 </div>
                             </div>
+                            {role === 'cocinero' && (
+                                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Estación Asignada</label>
+                                    <select
+                                        value={selectedStation}
+                                        onChange={(e) => setSelectedStation(e.target.value)}
+                                        className="w-full p-4 bg-gray-50 border-2 border-transparent focus:border-red-500 rounded-2xl font-bold outline-none appearance-none"
+                                    >
+                                        <option value="">Seleccionar Estación...</option>
+                                        {kitchenStations.map(s => (
+                                            <option key={s.id} value={s.id}>{s.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             <button type="submit" className="w-full py-5 bg-red-600 text-white font-black rounded-2xl uppercase tracking-widest shadow-xl shadow-red-100 active:scale-95 transition-all mt-4">
                                 Confirmar Datos
                             </button>

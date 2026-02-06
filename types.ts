@@ -32,6 +32,7 @@ export interface MenuItem {
   defaultIngredients?: string[]; // Ingredientes por defecto para pizzas especiales
   isCombo?: boolean; // Indica si es un combo
   comboIncludes?: string[]; // Descripción de lo que incluye el combo
+  kitchenStations?: string[]; // Estaciones de cocina a las que va este producto
 }
 
 export interface MenuCategory {
@@ -70,7 +71,7 @@ export interface PizzaConfiguration {
 
 // ============= FIN TIPOS PARA PIZZAS =============
 
-export type ThemeName = 'red' | 'blue' | 'green' | 'dark' | 'white' | 'marine' | 'margarita' | 'manga';
+export type ThemeName = 'red' | 'blue' | 'green' | 'dark' | 'white' | 'marine' | 'keclick' | 'manga';
 
 export interface StoreProfile {
   id: string;
@@ -101,6 +102,8 @@ export interface CartItem {
   notes?: string;
   isServed?: boolean;
   pizzaConfig?: PizzaConfiguration; // Configuración de pizza si aplica
+  kitchenStations?: string[]; // Estaciones de cocina asignadas a este item
+  kitchenStatus?: Record<string, 'pending' | 'preparing' | 'ready'>; // Estado por estación: { "Plancha": "ready", "Bebidas": "pending" }
 }
 
 export interface CustomerDetails {
@@ -115,7 +118,7 @@ export interface UserDetails {
   phone: string;
 }
 
-export type View = 'menu' | 'cart' | 'checkout' | 'success' | 'settings' | 'reports' | 'kanban';
+export type View = 'menu' | 'cart' | 'checkout' | 'success' | 'settings' | 'reports' | 'kanban' | 'dashboard' | 'kitchen';
 
 // --- POS/Report Types ---
 
@@ -168,6 +171,12 @@ export interface SpecialOffer {
   displayPrice: string;
 }
 
+export interface AuditEntry {
+  timestamp: string;
+  user: string;
+  action: string;
+}
+
 export interface SaleRecord {
   id: string;
   date: string;
@@ -181,28 +190,47 @@ export interface SaleRecord {
   orderCode?: string; // Added missing orderCode property for table audit
   customerName?: string;
   closed?: boolean;
+  createdAt?: string; // ISO string for precise time tracking
+  auditNotes?: AuditEntry[];
 }
 
-export type UserRole = 'admin' | 'mesero' | 'cajero';
+export type UserRole = 'admin' | 'mesero' | 'cajero' | 'cocinero';
 
 export interface User {
   id: string;
   name: string;
   pin: string;
   role: UserRole;
+  kitchenStation?: string; // Si es cocinero, a qué estación pertenece
 }
 
 export interface AppSettings {
+  storeId: string; // ID único para control de suscripción
+  businessName: string;
+  businessLogo: string; // Logo personalizable vía URL
   totalTables: number;
   printerPaperWidth: '58mm' | '80mm';
   exchangeRateBCV: number;
   exchangeRateParallel: number;
   activeExchangeRate: 'bcv' | 'parallel';
+  trialStartDate?: string; // Fecha en que se abrió la app por primera vez
   isTrialActive: boolean;
+  isLicenseActive: boolean;
+  licenseExpiryDate?: string; // Fecha exacta de vencimiento de la suscripción
   operationCount: number;
-  users: User[]; // Lista de usuarios con acceso al sistema
-  targetNumber: string; // Número de WhatsApp de la cocina
-  waitersCanCharge: boolean; // Si los meseros pueden procesar cobros
+  lifetimeRevenueUSD: number;
+  users: User[];
+  targetNumber: string;
+  isWhatsAppEnabled: boolean; // Interruptor para envío a cocina
+  waitersCanCharge: boolean;
+  kitchenStations: KitchenStation[];
+}
+
+// Estación de cocina (ej: Plancha, Horno, Bebidas)
+export interface KitchenStation {
+  id: string;
+  name: string;
+  color: string; // Color para identificar visualmente
 }
 // Registro de cierre de caja/turno
 export interface DayClosure {

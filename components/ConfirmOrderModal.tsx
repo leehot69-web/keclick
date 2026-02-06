@@ -29,7 +29,8 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
     if (!isOpen) return null;
 
     const isWaiter = userRole === 'mesero';
-    const canCharge = !isWaiter || waitersCanCharge;
+    // canCharge es true si no es mesero, O si siendo mesero el permiso no está apagado explícitamente
+    const canCharge = !isWaiter || waitersCanCharge !== false;
 
     return (
         <div

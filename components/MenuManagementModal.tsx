@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { MenuCategory, MenuItem, ModifierGroup, PizzaIngredient } from '../types';
+import { MenuCategory, MenuItem, ModifierGroup, PizzaIngredient, KitchenStation } from '../types';
 import MenuItemFormModal from './MenuItemFormModal';
 import CategoryFormModal from './CategoryFormModal';
 import ModifierGroupFormModal from './ModifierGroupFormModal';
@@ -14,10 +14,11 @@ interface MenuManagementModalProps {
   pizzaIngredients: PizzaIngredient[];
   pizzaBasePrices: Record<string, number>;
   onUpdatePizzaConfig: (ingredients: PizzaIngredient[], basePrices: Record<string, number>) => void;
+  kitchenStations: KitchenStation[];
 }
 
 const MenuManagementModal: React.FC<MenuManagementModalProps> = (props) => {
-  const { menu, modifierGroups, onSave, onClose, pizzaIngredients, pizzaBasePrices, onUpdatePizzaConfig } = props;
+  const { menu, modifierGroups, onSave, onClose, pizzaIngredients, pizzaBasePrices, onUpdatePizzaConfig, kitchenStations = [] } = props;
 
   // Estado local para permitir edición antes de guardar definitivamente
   const [localMenu, setLocalMenu] = useState<MenuCategory[]>(JSON.parse(JSON.stringify(menu)));
@@ -357,6 +358,7 @@ const MenuManagementModal: React.FC<MenuManagementModalProps> = (props) => {
         <MenuItemFormModal
           initialData={editingItem?.item}
           allModifierGroups={localModifierGroups}
+          kitchenStations={kitchenStations}
           onClose={closeItemForm}
           onSubmit={handleItemFormSubmit}
         />

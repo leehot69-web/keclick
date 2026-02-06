@@ -1,5 +1,5 @@
 {
-  "name": "ranchoapp",
+  "name": "keclick",
   "description": "App profesional para el registro y envío de pedidos vía WhatsApp para restaurantes y servicios de comida.",
   "requestFramePermissions": [
     "bluetooth"

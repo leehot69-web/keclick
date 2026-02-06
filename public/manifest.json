@@ -1,22 +1,22 @@
 {
-  "short_name": "Margarita",
-  "name": "Margarita Pizzería",
-  "description": "Sistema profesional de pedidos para Margarita Pizzería. Especialistas en pizza artesanal.",
+  "short_name": "Keclick",
+  "name": "Keclick - Facturación Express",
+  "description": "Sistema profesional de facturación y pedidos Keclick.",
   "icons": [
     {
-      "src": "https://i.imgur.com/TXJrPwn.png",
+      "src": "https://i.ibb.co/9HxvMhx/keclick-logo.png",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "any"
     },
     {
-      "src": "https://i.imgur.com/TXJrPwn.png",
+      "src": "https://i.ibb.co/9HxvMhx/keclick-logo.png",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "maskable"
     },
     {
-      "src": "https://i.imgur.com/TXJrPwn.png",
+      "src": "https://i.ibb.co/9HxvMhx/keclick-logo.png",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "any"
@@ -24,11 +24,11 @@
   ],
   "screenshots": [
     {
-      "src": "https://i.imgur.com/TXJrPwn.png",
+      "src": "https://i.ibb.co/9HxvMhx/keclick-logo.png",
       "sizes": "1080x1920",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "Margarita Pizzería"
+      "label": "Keclick"
     }
   ],
   "start_url": ".",

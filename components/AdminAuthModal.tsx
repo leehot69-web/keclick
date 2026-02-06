@@ -4,12 +4,14 @@ import React, { useState, useRef, useEffect } from 'react';
 interface AdminAuthModalProps {
   validPins: string[];
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (reason?: string) => void;
   title?: string;
+  requireReason?: boolean;
 }
 
-const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ validPins, onClose, onSuccess, title = "Autorización Requerida" }) => {
+const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ validPins, onClose, onSuccess, title = "Autorización Requerida", requireReason = false }) => {
   const [pin, setPin] = useState('');
+  const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -29,8 +31,14 @@ const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ validPins, onClose, onS
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (requireReason && !reason.trim()) {
+      setError('Debe indicar un motivo para esta acción.');
+      return;
+    }
+
     if (validPins.includes(pin)) {
-      onSuccess();
+      onSuccess(reason);
     } else {
       setError('PIN incorrecto. Intente de nuevo.');
       setPin(''); // Clear input on error
@@ -63,6 +71,24 @@ const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ validPins, onClose, onS
           </p>
         </div>
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+
+          {requireReason && (
+            <div>
+              <label htmlFor="reason" className="block text-sm font-medium text-gray-700 text-left mb-1">
+                Motivo de la anulación <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                id="reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={2}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--brand-color)] focus:border-[var(--brand-color)] text-sm"
+                placeholder="Ej: Error en el pedido, cliente se retiró..."
+                required
+              />
+            </div>
+          )}
+
           <div>
             <label htmlFor="admin-pin" className="sr-only">
               PIN de Administrador
@@ -84,7 +110,7 @@ const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ validPins, onClose, onS
           <div className="flex flex-col sm:flex-row-reverse gap-3">
             <button
               type="submit"
-              disabled={pin.length < 4}
+              disabled={pin.length < 4 || (requireReason && !reason.trim())}
               className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-[var(--brand-color)] text-base font-medium text-white hover:bg-[var(--brand-color-dark)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--brand-color)] sm:w-auto sm:text-sm disabled:bg-gray-400"
             >
               Autorizar
