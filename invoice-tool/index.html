@@ -410,14 +410,9 @@
             const today = new Date();
             document.getElementById('prevDate').innerText = today.toLocaleDateString();
 
-            // Cargar datos solicitados
-            document.getElementById('customerName').value = "Naudi Concho";
-            items = [
-                { name: "Golden Negro", qty: 3, price: 3.5 },
-                { name: "Golden Blanco", qty: 8, price: 3.5 },
-                { name: "Piel Goman", qty: 9, price: 3 },
-                { name: "Swarovski/Diamantes", qty: 2, price: 5 }
-            ];
+            // Iniciamos vacío
+            document.getElementById('customerName').value = "";
+            items = [];
             renderItems();
             updatePreview();
         };

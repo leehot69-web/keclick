@@ -108,6 +108,20 @@ export const useSupabaseSync = (
                     setReports(prev => prev.filter(r => r.id !== payload.old.id));
                 }
             })
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'day_closures',
+                filter: `store_id=eq.${currentStoreId}`
+            }, (payload) => {
+                if (payload.eventType === 'INSERT') {
+                    const newClosure = payload.new as DayClosure;
+                    setDayClosures(prev => {
+                        if (prev.some(c => c.id === newClosure.id)) return prev;
+                        return [newClosure, ...prev];
+                    });
+                }
+            })
             .subscribe();
 
         return () => {

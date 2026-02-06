@@ -248,7 +248,29 @@ function App() {
   const [lastSoldRecord, setLastSoldRecord] = useState<{ cart: CartItem[], details: CustomerDetails } | null>(null);
   const [receiptToPrint, setReceiptToPrint] = useState<{ cart: CartItem[], customer: CustomerDetails, waiter: string, title: string } | null>(null);
 
-  // Detalles de platos listos para este mesero (EXCLUYENDO los ya entregados/servidos)
+  // --- EFECTO: CIERRE GLOBAL ---
+  // Si alguien cierra caja desde otro equipo (Admin o el propio usuario), sacamos la sesión
+  useEffect(() => {
+    if (!currentUser) return;
+    const today = new Date().toISOString().split('T')[0];
+
+    // Buscar si hay un cierre reciente de hoy que deba afectarme
+    const latestClosure = dayClosures[0];
+    if (latestClosure && latestClosure.date === today) {
+      const isMyClosure = latestClosure.closedBy === currentUser.name;
+      const isAdminClosure = latestClosure.isAdminClosure;
+
+      if (isAdminClosure || isMyClosure) {
+        // Solo sacamos si el cierre ocurrió DESPUES de que nosotros entramos
+        // Pero como no tenemos "login time" exacto persistente, asumimos que si es nuevo y de hoy, 
+        // probablemente debamos cerrar sesión para evitar ventas huérfanas
+        handleLogout();
+        alert("La jornada ha sido cerrada por administración o desde otro dispositivo. Sesión finalizada.");
+      }
+    }
+  }, [dayClosures]);
+
+  // Detalles de platos listos para este mesero O ADMIN (EXCLUYENDO los ya entregados/servidos)
   const readyPlatesDetails = React.useMemo(() => {
     if (!currentUser) return [];
     const today = new Date().toISOString().split('T')[0];
@@ -256,9 +278,9 @@ function App() {
     const readyItems: { reportId: string, itemName: string, table: string }[] = [];
 
     reports.forEach(r => {
-      if (r.date === today && r.notes !== 'ANULADO' && !r.closed && r.waiter === currentUser.name) {
+      const isTargetUser = currentUser.role === 'admin' || r.waiter === currentUser.name;
+      if (r.date === today && r.notes !== 'ANULADO' && !r.closed && isTargetUser) {
         r.order.forEach((item: any) => {
-          // Si está listo en cocina PERO aún no ha sido marcado como "servido" por el mesero
           if (Object.values(item.kitchenStatus || {}).includes('ready') && !item.isServed) {
             readyItems.push({
               reportId: r.id,
@@ -275,17 +297,16 @@ function App() {
 
   const hasReadyPlates = readyPlatesDetails.length > 0;
 
-  // Detalles de platos en PREPARACIÓN para este mesero
+  // Detalles de platos en PREPARACIÓN para este mesero O ADMIN
   const preparingPlatesDetails = React.useMemo(() => {
     if (!currentUser) return [];
     const today = new Date().toISOString().split('T')[0];
     const preparingItems: { itemName: string, table: string }[] = [];
 
     reports.forEach(r => {
-      if (r.date === today && r.notes !== 'ANULADO' && !r.closed && r.waiter === currentUser.name) {
+      const isTargetUser = currentUser.role === 'admin' || r.waiter === currentUser.name;
+      if (r.date === today && r.notes !== 'ANULADO' && !r.closed && isTargetUser) {
         r.order.forEach((item: any) => {
-          // Si está en preparación (y no listo ni servido)
-          // Nota: Un ítem puede tener parte en 'preparing' y parte en 'pending'. Priorizamos mostrar si algo se mueve.
           const statuses = Object.values(item.kitchenStatus || {});
           if (statuses.includes('preparing') && !statuses.includes('ready') && !item.isServed) {
             preparingItems.push({
@@ -304,21 +325,31 @@ function App() {
   // Función para que el mesero marque que ya recogió/entregó los platos listos
   const handleMarkAllServed = () => {
     const reportIdsToUpdate = [...new Set(readyPlatesDetails.map(d => d.reportId))];
+    const updatedReports: SaleRecord[] = [];
 
-    setReports(prev => prev.map(r => {
-      if (!reportIdsToUpdate.includes(r.id)) return r;
+    setReports(prev => {
+      const newReports = prev.map(r => {
+        if (!reportIdsToUpdate.includes(r.id)) return r;
 
-      return {
-        ...r,
-        order: r.order.map((item: any) => {
-          // Si estaba listo, lo marcamos como servido para quitar la notificación
-          if (Object.values(item.kitchenStatus || {}).includes('ready')) {
-            return { ...item, isServed: true };
-          }
-          return item;
-        })
-      };
-    }));
+        const updated = {
+          ...r,
+          order: r.order.map((item: any) => {
+            if (Object.values(item.kitchenStatus || {}).includes('ready')) {
+              return { ...item, isServed: true };
+            }
+            return item;
+          })
+        };
+        updatedReports.push(updated);
+        return updated;
+      });
+      return newReports;
+    });
+
+    // Enviar los cambios a Supabase para que persistan y se sincronicen en otros equipos
+    setTimeout(() => {
+      updatedReports.forEach(r => syncSale(r));
+    }, 100);
   };
 
 
