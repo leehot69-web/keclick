@@ -294,12 +294,17 @@ function App() {
   const readyPlatesDetails = React.useMemo(() => {
     if (!currentUser) return [];
     const today = new Date().toISOString().split('T')[0];
+    const currentUserName = (currentUser.name || '').toLowerCase().trim();
 
     const readyItems: { reportId: string, itemName: string, table: string }[] = [];
 
     reports.forEach(r => {
-      const isTargetUser = currentUser.role === 'admin' || r.waiter === currentUser.name;
-      if (r.date === today && r.notes !== 'ANULADO' && !r.closed && isTargetUser) {
+      const reportWaiter = (r.waiter || '').toLowerCase().trim();
+      const isTargetUser = currentUser.role === 'admin' || reportWaiter === currentUserName;
+
+      const reportDate = (r.date || '').split('T')[0].trim();
+
+      if (reportDate === today && r.notes !== 'ANULADO' && !r.closed && isTargetUser) {
         r.order.forEach((item: any) => {
           if (Object.values(item.kitchenStatus || {}).includes('ready') && !item.isServed) {
             readyItems.push({
@@ -316,6 +321,35 @@ function App() {
   }, [reports, currentUser]);
 
   const hasReadyPlates = readyPlatesDetails.length > 0;
+
+  // --- EFECTO: ALERTA SONORA Y VIBRACIÓN ---
+  const lastReadyCount = React.useRef(0);
+  useEffect(() => {
+    if (readyPlatesDetails.length > lastReadyCount.current) {
+      // Solo alertar si estamos en una vista de mesero/admin y no en cocina
+      if (currentUser && currentUser.role !== 'cocinero' && currentView !== 'kitchen') {
+        try {
+          // Vibración (si el dispositivo lo permite)
+          if ('vibrate' in navigator) navigator.vibrate([200, 100, 200]);
+
+          // Sonido (browser permitiendo)
+          const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const oscillator = audioCtx.createOscillator();
+          const gainNode = audioCtx.createGain();
+          oscillator.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+          oscillator.type = 'sine';
+          oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // La5
+          gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+          oscillator.start();
+          oscillator.stop(audioCtx.currentTime + 0.2);
+        } catch (e) {
+          console.log('Audio/Vibrate blocked or not supported');
+        }
+      }
+    }
+    lastReadyCount.current = readyPlatesDetails.length;
+  }, [readyPlatesDetails.length, currentView, currentUser]);
 
   // Detalles de platos en PREPARACIÓN para este mesero O ADMIN
   const preparingPlatesDetails = React.useMemo(() => {
