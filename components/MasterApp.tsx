@@ -151,6 +151,22 @@ const MasterApp: React.FC = () => {
         }
     };
 
+    const deleteStore = async (storeId: string, storeName: string) => {
+        if (!window.confirm(`¿Estás SEGURO de eliminar definitivamente la tienda "${storeName}"?\n\nEsta acción borrará todas sus ventas, configuraciones y acceso de forma IRREVERSIBLE.`)) return;
+
+        const { error } = await supabase
+            .from('stores')
+            .delete()
+            .eq('id', storeId);
+
+        if (!error) {
+            setStores(prev => prev.filter(s => s.id !== storeId));
+            alert("🛸 Nave desintegrada del radar.");
+        } else {
+            alert("Error al desintegrar: " + error.message);
+        }
+    };
+
     const activatePlan = async (plan: Plan, model: 'subscription' | 'commission' | 'hybrid', rate: number = 0, fixed: number = 0, payment: number = 0) => {
         if (!selectedStore) return;
         const now = new Date();
@@ -314,6 +330,11 @@ const MasterApp: React.FC = () => {
                                         window.open(`https://wa.me/${store.ownerPhone}?text=${encodeURIComponent(msg)}`, '_blank');
                                     }} className="w-14 h-14 bg-[#FFD700]/10 border border-[#FFD700]/20 rounded-2xl hover:bg-[#FFD700] group/b flex items-center justify-center transition-all">
                                         <svg className="w-6 h-6 text-[#FFD700] group-hover/b:text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                                    </button>
+                                    <button onClick={() => deleteStore(store.id, store.name)} className="w-14 h-14 bg-red-900/10 border border-red-900/20 rounded-2xl hover:bg-red-600 group/d flex items-center justify-center transition-all">
+                                        <svg className="w-6 h-6 text-red-600 group-hover/d:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
                                     </button>
                                 </div>
                             </div>
