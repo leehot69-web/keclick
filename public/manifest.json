@@ -41,8 +41,8 @@
     "minimal-ui"
   ],
   "orientation": "portrait",
-  "theme_color": "#00D4AA",
-  "background_color": "#051a12",
+  "theme_color": "#000000",
+  "background_color": "#000000",
   "lang": "es",
   "categories": [
     "business",

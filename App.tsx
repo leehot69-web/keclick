@@ -1086,351 +1086,359 @@ function App() {
     }
   };
 
-  if (isSubscriptionInactive) {
-    const isActuallyExpired = settings.isLicenseActive && settings.licenseExpiryDate && new Date() > new Date(settings.licenseExpiryDate);
-
-    return (
-      <div className="fixed inset-0 z-[1000] bg-black flex flex-col items-center justify-center p-8 text-center bg-cover bg-center" style={{ backgroundImage: 'linear-gradient(rgba(0,0,0,0.95), rgba(0,0,0,0.98)), url(https://images.unsplash.com/photo-1543353071-087092ec393a?q=80&w=2070&auto=format&fit=crop)' }}>
-        <div className="w-24 h-24 bg-[#111] rounded-3xl p-3 mx-auto mb-6 shadow-2xl border border-[#FF0000]/30 flex flex-col items-center justify-center">
-          <KeclickLogo size="text-2xl" />
-        </div>
-        <h2 className="text-3xl font-black text-white uppercase tracking-tight mb-2">
-          {isActuallyExpired ? 'Suscripción Agotada' : 'Periodo de Prueba Vencido'}
-        </h2>
-        <p className="text-gray-400 text-sm mb-10 max-w-[280px]">
-          {isActuallyExpired
-            ? `Tu plan profesional ha finalizado. Renueva para seguir facturando.`
-            : 'Tu periodo de cortesía de 5 días ha finalizado. Activa tu licencia para continuar con la gestión de tu negocio.'
-          }
-        </p>
-
-        <div className="space-y-4 w-full max-w-xs">
-          <button
-            onClick={() => window.open(`https://wa.me/584120000000?text=${encodeURIComponent(`Hola, mi sistema Keclick (${settings.businessName}) ha vencido. Deseo activar mi plan.`)}`, '_blank')}
-            className="w-full py-5 bg-[#FF0000] text-white font-black rounded-2xl uppercase tracking-widest shadow-xl shadow-red-900/20 active:scale-95 transition-all"
-          >
-            Solicitar Activación
-          </button>
-          <button
-            onClick={() => window.location.reload()}
-            className="w-full py-3 bg-white/10 text-white font-bold rounded-2xl uppercase text-[10px] tracking-widest border border-white/5"
-          >
-            Refrescar Estado
-          </button>
-        </div>
-        <p className="mt-12 text-[8px] font-black text-gray-600 uppercase tracking-widest leading-none">
-          {settings.businessName} • ID: {settings.storeId}
-        </p>
-      </div>
-    );
-  }
-
   if (!isAppReady) return <SplashScreen onEnter={() => setIsAppReady(true)} />;
-
-  if (settings.storeId === 'NEW_STORE') {
-    return (
-      <div onContextMenu={(e) => { e.preventDefault(); setShowMasterDashboard(true); }} className="h-full bg-black p-2">
-        <div className="h-full w-full bg-white rounded-[38px] flex flex-col relative overflow-hidden" style={{ backgroundColor: 'var(--page-bg-color)' }}>
-          <div className="flex-1 overflow-y-auto">
-            <RegistrationScreen onRegister={handleRegister} onJoin={handleJoin} onRecover={handleRecoverId} />
-          </div>
-          {/* BOTÓN INSTALAR PRE-LOGIN */}
-          <div className="p-4 border-t bg-white flex justify-center">
-            <button
-              onClick={handleInstallClick}
-              className="flex items-center gap-2 px-6 py-3 bg-blue-50 text-blue-600 rounded-2xl font-black uppercase text-[10px] tracking-widest border border-blue-100 animate-pulse active:scale-95 transition-all"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              Instalar Aplicación
-            </button>
-          </div>
-        </div>
-        {showMasterDashboard && <MasterDashboard onClose={() => setShowMasterDashboard(false)} onSelectStore={(id) => { handleJoin(id); setShowMasterDashboard(false); }} />}
-      </div>
-    );
-  }
-
-  if (!currentUser) {
-    return (
-      <div onContextMenu={(e) => { e.preventDefault(); setShowMasterDashboard(true); }} className="h-full bg-black p-2 font-sans">
-        <div className="h-full w-full bg-white rounded-[38px] flex flex-col relative overflow-hidden" style={{ backgroundColor: 'var(--page-bg-color)' }}>
-          <div className="flex-1 overflow-y-auto">
-            <LoginScreen
-              users={settings.users}
-              onLogin={(user) => {
-                setCurrentUser(user);
-                if (user.role === 'cocinero') {
-                  setCurrentView('kitchen');
-                }
-              }}
-              businessName={businessName}
-              businessLogo={businessLogo}
-            />
-          </div>
-          {/* BOTÓN INSTALAR PRE-LOGIN */}
-          <div className="p-4 border-t bg-white flex justify-center">
-            <button
-              onClick={handleInstallClick}
-              className="flex items-center gap-2 px-6 py-3 bg-blue-50 text-blue-600 rounded-2xl font-black uppercase text-[10px] tracking-widest border border-blue-100 animate-pulse active:scale-95 transition-all"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              Instalar Aplicación
-            </button>
-          </div>
-        </div>
-        {showMasterDashboard && <MasterDashboard onClose={() => setShowMasterDashboard(false)} onSelectStore={(id) => { handleJoin(id); setShowMasterDashboard(false); }} />}
-      </div>
-    );
-  }
-
 
   return (
     <>
-      <div className="h-full w-full bg-black p-2 box-border">
-        <div className="h-full w-full bg-white rounded-[38px] flex flex-col relative overflow-hidden" style={{ backgroundColor: 'var(--page-bg-color)' }}>
-          <main className="flex-1 overflow-hidden relative flex flex-col">
-            <div className="flex-1 overflow-hidden relative">
-              {(() => {
-                if (isSubscriptionInactive) {
-                  return (
-                    <div className="h-full bg-black flex flex-col items-center justify-center p-8 text-center overscroll-contain">
-                      <KeclickLogo size="text-6xl" />
-                      <div className="mt-8 bg-[#111] p-10 rounded-[3rem] border border-red-500/20 max-w-sm shadow-2xl">
-                        <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        </div>
-                        <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-4">PRUEBA VENCIDA</h2>
-                        <p className="text-gray-400 text-sm leading-relaxed mb-8">Tus 5 días de prueba han terminado. Para continuar usando **Keclick PRO**, contacta con soporte para activar tu licencia.</p>
-                        <button onClick={() => window.open(`https://wa.me/${settings.targetNumber || '584120000000'}?text=Hola, mi prueba de Keclick (${settings.storeId}) ha vencido. Deseo activar mi plan.`, '_blank')} className="w-full py-4 bg-[#FFD700] text-black font-black rounded-2xl uppercase tracking-widest active:scale-95 transition-transform">Activar Ahora</button>
+      {(() => {
+        if (isSubscriptionInactive) {
+          const isActuallyExpired = settings.isLicenseActive && settings.licenseExpiryDate && new Date() > new Date(settings.licenseExpiryDate);
+
+          return (
+            <div className="fixed inset-0 z-[1000] bg-black flex flex-col items-center justify-center p-8 text-center bg-cover bg-center" style={{ backgroundImage: 'linear-gradient(rgba(0,0,0,0.95), rgba(0,0,0,0.98)), url(https://images.unsplash.com/photo-1543353071-087092ec393a?q=80&w=2070&auto=format&fit=crop)' }}>
+              <div className="w-24 h-24 bg-[#111] rounded-3xl p-3 mx-auto mb-6 shadow-2xl border border-[#FF0000]/30 flex flex-col items-center justify-center">
+                <KeclickLogo size="text-2xl" />
+              </div>
+              <h2 className="text-3xl font-black text-white uppercase tracking-tight mb-2">
+                {isActuallyExpired ? 'Suscripción Agotada' : 'Periodo de Prueba Vencido'}
+              </h2>
+              <p className="text-gray-400 text-sm mb-10 max-w-[280px]">
+                {isActuallyExpired
+                  ? `Tu plan profesional ha finalizado. Renueva para seguir facturando.`
+                  : 'Tu periodo de cortesía de 5 días ha finalizado. Activa tu licencia para continuar con la gestión de tu negocio.'
+                }
+              </p>
+
+              <div className="space-y-4 w-full max-w-xs">
+                <button
+                  onClick={() => window.open(`https://wa.me/584120000000?text=${encodeURIComponent(`Hola, mi sistema Keclick (${settings.businessName}) ha vencido. Deseo activar mi plan.`)}`, '_blank')}
+                  className="w-full py-5 bg-[#FF0000] text-white font-black rounded-2xl uppercase tracking-widest shadow-xl shadow-red-900/20 active:scale-95 transition-all"
+                >
+                  Solicitar Activación
+                </button>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="w-full py-3 bg-white/10 text-white font-bold rounded-2xl uppercase text-[10px] tracking-widest border border-white/5"
+                >
+                  Refrescar Estado
+                </button>
+              </div>
+
+              <div className="mt-8 flex justify-center">
+                <button
+                  onClick={handleInstallClick}
+                  className="flex items-center gap-2 px-6 py-3 bg-blue-500/10 text-blue-400 rounded-2xl font-black uppercase text-[10px] tracking-widest border border-blue-500/20 active:scale-95 transition-all"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Instalar Aplicación
+                </button>
+              </div>
+
+              <p className="mt-12 text-[8px] font-black text-gray-600 uppercase tracking-widest leading-none">
+                {settings.businessName} • ID: {settings.storeId}
+              </p>
+            </div>
+          );
+        }
+
+        if (settings.storeId === 'NEW_STORE') {
+          return (
+            <div onContextMenu={(e) => { e.preventDefault(); setShowMasterDashboard(true); }} className="h-full bg-black p-2">
+              <div className="h-full w-full bg-white rounded-[38px] flex flex-col relative overflow-hidden" style={{ backgroundColor: 'var(--page-bg-color)' }}>
+                <div className="flex-1 overflow-y-auto">
+                  <RegistrationScreen onRegister={handleRegister} onJoin={handleJoin} onRecover={handleRecoverId} />
+                </div>
+                {/* BOTÓN INSTALAR PRE-LOGIN */}
+                <div className="p-4 border-t bg-white flex justify-center">
+                  <button
+                    onClick={handleInstallClick}
+                    className="flex items-center gap-2 px-6 py-3 bg-blue-50 text-blue-600 rounded-2xl font-black uppercase text-[10px] tracking-widest border border-blue-100 animate-pulse active:scale-95 transition-all"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Instalar Aplicación
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        if (!currentUser) {
+          return (
+            <div onContextMenu={(e) => { e.preventDefault(); setShowMasterDashboard(true); }} className="h-full bg-black p-2 font-sans">
+              <div className="h-full w-full bg-white rounded-[38px] flex flex-col relative overflow-hidden" style={{ backgroundColor: 'var(--page-bg-color)' }}>
+                <div className="flex-1 overflow-y-auto">
+                  <LoginScreen
+                    users={settings.users}
+                    onLogin={(user) => {
+                      setCurrentUser(user);
+                      if (user.role === 'cocinero') {
+                        setCurrentView('kitchen');
+                      }
+                    }}
+                    businessName={businessName}
+                    businessLogo={businessLogo}
+                  />
+                </div>
+                {/* BOTÓN INSTALAR PRE-LOGIN */}
+                <div className="p-4 border-t bg-white flex justify-center">
+                  <button
+                    onClick={handleInstallClick}
+                    className="flex items-center gap-2 px-6 py-3 bg-blue-50 text-blue-600 rounded-2xl font-black uppercase text-[10px] tracking-widest border border-blue-100 animate-pulse active:scale-95 transition-all"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Instalar Aplicación
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div className="h-full w-full bg-black p-2 box-border">
+            <div className="h-full w-full bg-white rounded-[38px] flex flex-col relative overflow-hidden" style={{ backgroundColor: 'var(--page-bg-color)' }}>
+              <main className="flex-1 overflow-hidden relative flex flex-col">
+                <div className="flex-1 overflow-hidden relative">
+                  {(() => {
+                    switch (currentView) {
+                      case 'menu': return <MenuScreen menu={menu} cart={cart} onAddItem={handleAddItem} onUpdateQuantity={handleUpdateQuantity} onRemoveItem={handleRemoveItem} onClearCart={handleClearCart} cartItemCount={cart.reduce((acc, item) => acc + item.quantity, 0)} onOpenModifierModal={setModifierModalItem} onOpenPizzaBuilder={setPizzaBuilderItem} onGoToCart={() => setCurrentView('cart')} businessName={businessName} businessLogo={businessLogo} triggerShake={triggerCartShake} showInstallButton={showInstallBtn} onInstallApp={handleInstallClick} activeRate={activeRate} isEditing={!!editingReportId} theme={theme} />;
+                      case 'cart': return <CartScreen cart={cart} onUpdateQuantity={handleUpdateQuantity} onRemoveItem={handleRemoveItem} onClearCart={handleClearCart} onBackToMenu={() => setCurrentView('menu')} onGoToCheckout={() => setCurrentView('checkout')} onEditItem={(id) => { const item = cart.find(i => i.id === id); if (item) { setEditingCartItemId(id); for (const cat of menu) { const original = cat.items.find(i => i.name === item.name); if (original) { setModifierModalItem(original); break; } } } }} activeRate={activeRate} isEditing={!!editingReportId} isAdmin={currentUser?.role === 'admin'} />;
+                      case 'checkout': return <CheckoutScreen cart={cart} customerDetails={customerDetails} paymentMethods={['Efectivo', 'Pago Móvil', 'Zelle', 'Divisas']} onUpdateDetails={setCustomerDetails} onBack={() => setCurrentView('cart')} onSubmitOrder={() => setConfirmOrderModalOpen(true)} onEditUserDetails={handleLogout} onClearCart={handleClearCart} activeRate={activeRate} isEditing={!!editingReportId} />;
+                      case 'settings': {
+                        return <SettingsScreen
+                          settings={settings}
+                          onSaveSettings={(s) => {
+                            setSettings(s);
+                            syncSettings(s as AppSettings);
+                          }}
+                          onGoToTables={() => setCurrentView('menu')}
+                          waiter={currentUser?.name || ''}
+                          onLogout={handleLogout}
+                          waiterAssignments={{}}
+                          onSaveAssignments={{}}
+                          storeProfiles={memoizedProfiles}
+                          onUpdateStoreProfiles={(profiles) => {
+                            const p = Array.isArray(profiles) ? profiles[0] : (typeof profiles === 'function' ? profiles([])[0] : null);
+                            if (p) {
+                              setBusinessName(p.name);
+                              setMenu(p.menu);
+                              setModifierGroups(p.modifierGroups);
+                              setTheme(p.theme);
+                            }
+                          }}
+                          activeTableNumbers={[]}
+                          onBackupAllSalesData={() => { }}
+                          onClearAllSalesData={() => {
+                            if (window.confirm("¿Borrar definitivamente todo el historial?")) {
+                              setReports([]);
+                            }
+                          }}
+                          onConnectPrinter={handleConnectPrinter}
+                          onDisconnectPrinter={handleDisconnectPrinter}
+                          isPrinterConnected={isPrinterConnected}
+                          printerName={printerDevice?.name}
+                          onPrintTest={handlePrintTest}
+                          pizzaIngredients={pizzaIngredients}
+                          pizzaBasePrices={pizzaBasePrices}
+                          onUpdatePizzaConfig={(ingredients, basePrices) => {
+                            setPizzaIngredients(ingredients);
+                            setPizzaBasePrices(basePrices);
+                          }}
+                          onResetApp={() => {
+                            if (window.confirm("¿Seguro que quieres cerrar este negocio?")) {
+                              setSettings(prev => ({ ...prev, storeId: 'NEW_STORE' }));
+                              setCurrentUser(null);
+                              setCurrentView('menu');
+                            }
+                          }}
+                        />;
+                      }
+                      case 'reports': return <ReportsScreen reports={reports} dayClosures={dayClosures} onGoToTables={() => setCurrentView('menu')} onDeleteReports={(ids) => { setReports(prev => prev.filter(r => !ids.includes(r.id))); return true; }} settings={settings} onStartNewDay={handleStartNewDay} currentWaiter={currentUser?.name || ''} onOpenSalesHistory={() => setIsSalesHistoryModalOpen(true)} onReprintSaleRecord={handleReprintSaleRecord} isPrinterConnected={isPrinterConnected} onEditPendingReport={handleEditPendingReport} onVoidReport={handleVoidReport} isAdmin={currentUser?.role === 'admin'} forceRenderCount={forceRenderCount} />;
+                      case 'dashboard': return <AdminDashboard reports={reports} settings={settings} onGoToView={(v) => setCurrentView(v)} onEditOrder={handleEditPendingReport} onVoidOrder={handleVoidReport} onReprintOrder={handlePrintOrder(undefined, true)} isPrinterConnected={isPrinterConnected} forceRenderCount={forceRenderCount} />;
+                      case 'kitchen': return < KitchenScreen
+                        reports={reports}
+                        settings={settings}
+                        currentUser={currentUser}
+                        onUpdateItemStatus={async (reportId, itemId, stationId, status) => {
+                          let updatedReportToSync: SaleRecord | null = null;
+                          const updatedReports = reports.map(r => {
+                            if (r.id !== reportId) return r;
+                            const updated = {
+                              ...r,
+                              order: r.order.map((item: any) => {
+                                if (item.id !== itemId) return item;
+                                const currentStatus = item.kitchenStatus || {};
+                                return {
+                                  ...item,
+                                  kitchenStatus: { ...currentStatus, [stationId]: status }
+                                };
+                              })
+                            };
+                            updatedReportToSync = updated;
+                            return updated;
+                          });
+
+                          if (updatedReportToSync) {
+                            const result = await safeSyncSale(updatedReportToSync);
+                            if (!result.success) {
+                              alert("⚠️ COMANDA DESACTUALIZADA:\nEl mesero ya cerró o anuló esta orden. No se puede actualizar el estado.");
+                              refreshData();
+                              return;
+                            }
+                            setReports(updatedReports);
+                          }
+                        }}
+                        onCloseOrder={async (reportId) => {
+                          if (window.confirm("¿Terminar comanda?")) {
+                            const targetReport = reports.find(r => r.id === reportId);
+                            if (!targetReport) return;
+
+                            const updated: SaleRecord = { ...targetReport, closed: true };
+                            const result = await safeSyncSale(updated);
+
+                            if (!result.success) {
+                              alert("⚠️ COMANDA YA GESTIONADA:\nEl mesero ya cerró o modificó esta orden.");
+                              refreshData();
+                              return;
+                            }
+
+                            setReports(prev => prev.map(r => r.id === reportId ? updated : r));
+                          }
+                        }}
+                        onLogout={handleLogout}
+                        onManualSync={handleManualSync}
+                        syncStatus={syncStatus}
+                        lastSyncTime={lastSyncTime}
+                        forceRenderCount={forceRenderCount}
+                      />;
+                      case 'success': return <SuccessScreen cart={lastSoldRecord?.cart || []} customerDetails={lastSoldRecord?.details || customerDetails} onStartNewOrder={handleStartNewOrder} onReprint={() => handlePrintOrder(undefined, true)} isPrinterConnected={isPrinterConnected} activeRate={activeRate} />;
+                      default: return null;
+                    }
+                  })()}
+                </div>
+
+                {/* Notificaciones */}
+                {currentUser && currentUser.role === 'mesero' && hasPreparingPlates && currentView !== 'kitchen' && (
+                  <div className="absolute top-4 left-4 right-4 bg-amber-500/90 backdrop-blur-md text-white py-2 px-4 shadow-xl rounded-2xl z-[100] border border-amber-400 flex items-center justify-between gap-3 overflow-hidden">
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="flex h-6 w-6 items-center justify-center bg-white text-amber-600 rounded-full animate-pulse">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      </span>
+                      <span className="text-[10px] font-black uppercase tracking-tighter">COCINANDO</span>
+                    </div>
+                    <div className="flex-1 overflow-hidden">
+                      <div className="animate-marquee whitespace-nowrap text-xs font-bold uppercase italic tracking-widest">
+                        {preparingPlatesDetails.map((item, idx) => (<span key={idx} className="mr-8">🔥 {item.itemName} ({item.table})</span>))}
                       </div>
                     </div>
-                  );
-                }
-
-                switch (currentView) {
-                  case 'menu': return <MenuScreen menu={menu} cart={cart} onAddItem={handleAddItem} onUpdateQuantity={handleUpdateQuantity} onRemoveItem={handleRemoveItem} onClearCart={handleClearCart} cartItemCount={cart.reduce((acc, item) => acc + item.quantity, 0)} onOpenModifierModal={setModifierModalItem} onOpenPizzaBuilder={setPizzaBuilderItem} onGoToCart={() => setCurrentView('cart')} businessName={businessName} businessLogo={businessLogo} triggerShake={triggerCartShake} showInstallButton={showInstallBtn} onInstallApp={handleInstallClick} activeRate={activeRate} isEditing={!!editingReportId} theme={theme} />;
-                  case 'cart': return <CartScreen cart={cart} onUpdateQuantity={handleUpdateQuantity} onRemoveItem={handleRemoveItem} onClearCart={handleClearCart} onBackToMenu={() => setCurrentView('menu')} onGoToCheckout={() => setCurrentView('checkout')} onEditItem={(id) => { const item = cart.find(i => i.id === id); if (item) { setEditingCartItemId(id); for (const cat of menu) { const original = cat.items.find(i => i.name === item.name); if (original) { setModifierModalItem(original); break; } } } }} activeRate={activeRate} isEditing={!!editingReportId} isAdmin={currentUser?.role === 'admin'} />;
-                  case 'checkout': return <CheckoutScreen cart={cart} customerDetails={customerDetails} paymentMethods={['Efectivo', 'Pago Móvil', 'Zelle', 'Divisas']} onUpdateDetails={setCustomerDetails} onBack={() => setCurrentView('cart')} onSubmitOrder={() => setConfirmOrderModalOpen(true)} onEditUserDetails={handleLogout} onClearCart={handleClearCart} activeRate={activeRate} isEditing={!!editingReportId} />;
-                  case 'settings': {
-                    return <SettingsScreen
-                      settings={settings}
-                      onSaveSettings={(s) => {
-                        setSettings(s);
-                        syncSettings(s as AppSettings);
-                      }}
-                      onGoToTables={() => setCurrentView('menu')}
-                      waiter={currentUser?.name || ''}
-                      onLogout={handleLogout}
-                      waiterAssignments={{}}
-                      onSaveAssignments={{}}
-                      storeProfiles={memoizedProfiles}
-                      onUpdateStoreProfiles={(profiles) => {
-                        const p = Array.isArray(profiles) ? profiles[0] : (typeof profiles === 'function' ? profiles([])[0] : null);
-                        if (p) {
-                          setBusinessName(p.name);
-                          setMenu(p.menu);
-                          setModifierGroups(p.modifierGroups);
-                          setTheme(p.theme);
-                        }
-                      }}
-                      activeTableNumbers={[]}
-                      onBackupAllSalesData={() => { }}
-                      onClearAllSalesData={() => {
-                        if (window.confirm("¿Borrar definitivamente todo el historial?")) {
-                          setReports([]);
-                        }
-                      }}
-                      onConnectPrinter={handleConnectPrinter}
-                      onDisconnectPrinter={handleDisconnectPrinter}
-                      isPrinterConnected={isPrinterConnected}
-                      printerName={printerDevice?.name}
-                      onPrintTest={handlePrintTest}
-                      pizzaIngredients={pizzaIngredients}
-                      pizzaBasePrices={pizzaBasePrices}
-                      onUpdatePizzaConfig={(ingredients, basePrices) => {
-                        setPizzaIngredients(ingredients);
-                        setPizzaBasePrices(basePrices);
-                      }}
-                      onResetApp={() => {
-                        if (window.confirm("¿Seguro que quieres cerrar este negocio?")) {
-                          setSettings(prev => ({ ...prev, storeId: 'NEW_STORE' }));
-                          setCurrentUser(null);
-                          setCurrentView('menu');
-                        }
-                      }}
-                    />;
-                  }
-                  case 'reports': return <ReportsScreen reports={reports} dayClosures={dayClosures} onGoToTables={() => setCurrentView('menu')} onDeleteReports={(ids) => { setReports(prev => prev.filter(r => !ids.includes(r.id))); return true; }} settings={settings} onStartNewDay={handleStartNewDay} currentWaiter={currentUser?.name || ''} onOpenSalesHistory={() => setIsSalesHistoryModalOpen(true)} onReprintSaleRecord={handleReprintSaleRecord} isPrinterConnected={isPrinterConnected} onEditPendingReport={handleEditPendingReport} onVoidReport={handleVoidReport} isAdmin={currentUser?.role === 'admin'} forceRenderCount={forceRenderCount} />;
-                  case 'dashboard': return <AdminDashboard reports={reports} settings={settings} onGoToView={(v) => setCurrentView(v)} onEditOrder={handleEditPendingReport} onVoidOrder={handleVoidReport} onReprintOrder={handlePrintOrder(undefined, true)} isPrinterConnected={isPrinterConnected} forceRenderCount={forceRenderCount} />;
-                  case 'kitchen': return < KitchenScreen
-                    reports={reports}
-                    settings={settings}
-                    currentUser={currentUser}
-                    onUpdateItemStatus={async (reportId, itemId, stationId, status) => {
-                      let updatedReportToSync: SaleRecord | null = null;
-                      const updatedReports = reports.map(r => {
-                        if (r.id !== reportId) return r;
-                        const updated = {
-                          ...r,
-                          order: r.order.map((item: any) => {
-                            if (item.id !== itemId) return item;
-                            const currentStatus = item.kitchenStatus || {};
-                            return {
-                              ...item,
-                              kitchenStatus: { ...currentStatus, [stationId]: status }
-                            };
-                          })
-                        };
-                        updatedReportToSync = updated;
-                        return updated;
-                      });
-
-                      if (updatedReportToSync) {
-                        const result = await safeSyncSale(updatedReportToSync);
-                        if (!result.success) {
-                          alert("⚠️ COMANDA DESACTUALIZADA:\nEl mesero ya cerró o anuló esta orden. No se puede actualizar el estado.");
-                          refreshData();
-                          return;
-                        }
-                        setReports(updatedReports);
-                      }
-                    }}
-                    onCloseOrder={async (reportId) => {
-                      if (window.confirm("¿Terminar comanda?")) {
-                        const targetReport = reports.find(r => r.id === reportId);
-                        if (!targetReport) return;
-
-                        const updated: SaleRecord = { ...targetReport, closed: true };
-                        const result = await safeSyncSale(updated);
-
-                        if (!result.success) {
-                          alert("⚠️ COMANDA YA GESTIONADA:\nEl mesero ya cerró o modificó esta orden.");
-                          refreshData();
-                          return;
-                        }
-
-                        setReports(prev => prev.map(r => r.id === reportId ? updated : r));
-                      }
-                    }}
-                    onLogout={handleLogout}
-                    onManualSync={handleManualSync}
-                    syncStatus={syncStatus}
-                    lastSyncTime={lastSyncTime}
-                    forceRenderCount={forceRenderCount}
-                  />;
-                  case 'success': return <SuccessScreen cart={lastSoldRecord?.cart || []} customerDetails={lastSoldRecord?.details || customerDetails} onStartNewOrder={handleStartNewOrder} onReprint={() => handlePrintOrder(undefined, true)} isPrinterConnected={isPrinterConnected} activeRate={activeRate} />;
-                  default: return null;
-                }
-              })()}
-            </div>
-
-            {/* Notificaciones */}
-            {currentUser && currentUser.role === 'mesero' && hasPreparingPlates && currentView !== 'kitchen' && (
-              <div className="absolute top-4 left-4 right-4 bg-amber-500/90 backdrop-blur-md text-white py-2 px-4 shadow-xl rounded-2xl z-[100] border border-amber-400 flex items-center justify-between gap-3 overflow-hidden">
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="flex h-6 w-6 items-center justify-center bg-white text-amber-600 rounded-full animate-pulse">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  </span>
-                  <span className="text-[10px] font-black uppercase tracking-tighter">COCINANDO</span>
-                </div>
-                <div className="flex-1 overflow-hidden">
-                  <div className="animate-marquee whitespace-nowrap text-xs font-bold uppercase italic tracking-widest">
-                    {preparingPlatesDetails.map((item, idx) => (<span key={idx} className="mr-8">🔥 {item.itemName} ({item.table})</span>))}
                   </div>
-                </div>
-              </div>
-            )}
-
-            {currentUser && (currentUser.role === 'mesero' || currentUser.role === 'admin') && hasReadyPlates && currentView !== 'kitchen' && (
-              <div className="absolute top-4 left-4 right-4 bg-green-600/90 backdrop-blur-md text-white py-2 px-4 shadow-xl rounded-2xl z-[110] border border-green-500 flex items-center justify-between gap-3 overflow-hidden">
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="flex h-6 w-6 items-center justify-center bg-white text-green-600 rounded-full animate-bounce">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                  </span>
-                </div>
-                <div className="flex-1 overflow-hidden">
-                  <div className="animate-marquee whitespace-nowrap text-xs font-bold uppercase italic tracking-widest">
-                    {readyPlatesDetails.map((item, idx) => (<span key={idx} className="mr-8">🍴 {item.itemName} ({item.table})</span>))}
-                  </div>
-                </div>
-                <button onClick={(e) => { e.stopPropagation(); handleMarkAllServed(); }} className="bg-white text-green-700 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase shadow-lg border border-green-500 shrink-0">ENTREGADO ✓</button>
-              </div>
-            )}
-          </main>
-
-          {currentView !== 'kitchen' && (
-            <div className="bg-white border-t px-2 py-3 flex justify-around items-center shrink-0 shadow-[0_-10px_30px_rgba(0,0,0,0.05)] z-50">
-              <button onClick={() => setCurrentView('menu')} className={`flex flex-col items-center gap-1 ${currentView === 'menu' ? 'text-brand' : 'text-gray-400'}`}>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-                <span className="text-[8px] font-black uppercase">Menú</span>
-              </button>
-              <button onClick={() => setCurrentView('reports')} className={`flex flex-col items-center gap-1 relative ${currentView === 'reports' ? 'text-brand' : 'text-gray-400'}`}>
-                {hasReadyPlates && (
-                  <span className="absolute -top-1 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white animate-bounce shadow-lg shadow-green-200"></span>
                 )}
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-                <span className="text-[8px] font-black uppercase">Ventas</span>
-              </button>
-              <button onClick={() => setCurrentView('settings')} className={`flex flex-col items-center gap-1 ${currentView === 'settings' ? 'text-brand' : 'text-gray-400'}`}>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                <span className="text-[8px] font-black uppercase">Tools</span>
-              </button>
 
-              {currentUser?.role === 'admin' && (
-                <button onClick={() => setCurrentView('dashboard')} className={`flex flex-col items-center gap-1 ${currentView === 'dashboard' ? 'text-brand' : 'text-gray-400'}`}>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg>
-                  <span className="text-[8px] font-black uppercase">Dash</span>
-                </button>
+                {currentUser && (currentUser.role === 'mesero' || currentUser.role === 'admin') && hasReadyPlates && currentView !== 'kitchen' && (
+                  <div className="absolute top-4 left-4 right-4 bg-green-600/90 backdrop-blur-md text-white py-2 px-4 shadow-xl rounded-2xl z-[110] border border-green-500 flex items-center justify-between gap-3 overflow-hidden">
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="flex h-6 w-6 items-center justify-center bg-white text-green-600 rounded-full animate-bounce">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                      </span>
+                    </div>
+                    <div className="flex-1 overflow-hidden">
+                      <div className="animate-marquee whitespace-nowrap text-xs font-bold uppercase italic tracking-widest">
+                        {readyPlatesDetails.map((item, idx) => (<span key={idx} className="mr-8">🍴 {item.itemName} ({item.table})</span>))}
+                      </div>
+                    </div>
+                    <button onClick={(e) => { e.stopPropagation(); handleMarkAllServed(); }} className="bg-white text-green-700 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase shadow-lg border border-green-500 shrink-0">ENTREGADO ✓</button>
+                  </div>
+                )}
+              </main>
+
+              {currentView !== 'kitchen' && (
+                <div className="bg-white border-t px-2 py-3 flex justify-around items-center shrink-0 shadow-[0_-10px_30px_rgba(0,0,0,0.05)] z-50">
+                  <button onClick={() => setCurrentView('menu')} className={`flex flex-col items-center gap-1 ${currentView === 'menu' ? 'text-brand' : 'text-gray-400'}`}>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                    <span className="text-[8px] font-black uppercase">Menú</span>
+                  </button>
+                  <button onClick={() => setCurrentView('reports')} className={`flex flex-col items-center gap-1 relative ${currentView === 'reports' ? 'text-brand' : 'text-gray-400'}`}>
+                    {hasReadyPlates && (
+                      <span className="absolute -top-1 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white animate-bounce shadow-lg shadow-green-200"></span>
+                    )}
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                    <span className="text-[8px] font-black uppercase">Ventas</span>
+                  </button>
+                  <button onClick={() => setCurrentView('settings')} className={`flex flex-col items-center gap-1 ${currentView === 'settings' ? 'text-brand' : 'text-gray-400'}`}>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    <span className="text-[8px] font-black uppercase">Tools</span>
+                  </button>
+
+                  {currentUser?.role === 'admin' && (
+                    <button onClick={() => setCurrentView('dashboard')} className={`flex flex-col items-center gap-1 ${currentView === 'dashboard' ? 'text-brand' : 'text-gray-400'}`}>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg>
+                      <span className="text-[8px] font-black uppercase">Dash</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={handleInstallClick}
+                    className="flex flex-col items-center gap-1 text-blue-600 animate-pulse bg-blue-50 px-3 py-1 rounded-xl border border-blue-100"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    <span className="text-[8px] font-black uppercase text-blue-700">APP</span>
+                  </button>
+
+                  <button onClick={handleManualSync} className={`flex flex-col items-center gap-1 relative ${isSyncing ? 'text-brand' : 'text-gray-400'}`}>
+                    <span className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-white ${syncStatus === 'online' ? 'bg-green-500' : syncStatus === 'polling' ? 'bg-amber-500 animate-pulse' : 'bg-gray-400'}`}></span>
+                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${isSyncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    <span className="text-[8px] font-black uppercase">Sync</span>
+                  </button>
+
+                  <button onClick={handleLogout} className="flex flex-col items-center gap-1 text-red-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                    <span className="text-[8px] font-black uppercase">Salir</span>
+                  </button>
+                </div>
               )}
-
-              <button
-                onClick={handleInstallClick}
-                className="flex flex-col items-center gap-1 text-blue-600 animate-pulse bg-blue-50 px-3 py-1 rounded-xl border border-blue-100"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                <span className="text-[8px] font-black uppercase text-blue-700">APP</span>
-              </button>
-
-              <button onClick={handleManualSync} className={`flex flex-col items-center gap-1 relative ${isSyncing ? 'text-brand' : 'text-gray-400'}`}>
-                <span className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-white ${syncStatus === 'online' ? 'bg-green-500' : syncStatus === 'polling' ? 'bg-amber-500 animate-pulse' : 'bg-gray-400'}`}></span>
-                <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${isSyncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                <span className="text-[8px] font-black uppercase">Sync</span>
-              </button>
-
-              <button onClick={handleLogout} className="flex flex-col items-center gap-1 text-red-500">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-                <span className="text-[8px] font-black uppercase">Salir</span>
-              </button>
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+        );
+      })()}
 
+      {/* GLOBAL COMPONENTS - Always rendered unless SplashScreen */}
+      {
+        showMasterDashboard && (
+          <MasterDashboard
+            onClose={() => setShowMasterDashboard(false)}
+            onSelectStore={(id) => { handleJoin(id); setShowMasterDashboard(false); }}
+          />
+        )
+      }
 
-      {modifierModalItem && (
-        <ProductModifierModal
-          item={modifierModalItem}
-          initialCartItem={editingCartItemId ? cart.find(i => i.id === editingCartItemId) : null}
-          allModifierGroups={modifierGroups}
-          onClose={() => { setModifierModalItem(null); setEditingCartItemId(null); }}
-          onSubmit={(item, mods, qty) => {
-            if (editingCartItemId) {
-              setCart(prev => prev.map(i => i.id === editingCartItemId ? { ...i, selectedModifiers: mods, quantity: qty } : i));
-              setEditingCartItemId(null);
-            } else {
-              handleAddItem(item, mods, qty);
-            }
-            setModifierModalItem(null);
-          }}
-          activeRate={activeRate}
-        />
-      )
+      {
+        modifierModalItem && (
+          <ProductModifierModal
+            item={modifierModalItem}
+            initialCartItem={editingCartItemId ? cart.find(i => i.id === editingCartItemId) : null}
+            allModifierGroups={modifierGroups}
+            onClose={() => { setModifierModalItem(null); setEditingCartItemId(null); }}
+            onSubmit={(item, mods, qty) => {
+              if (editingCartItemId) {
+                setCart(prev => prev.map(i => i.id === editingCartItemId ? { ...i, selectedModifiers: mods, quantity: qty } : i));
+                setEditingCartItemId(null);
+              } else {
+                handleAddItem(item, mods, qty);
+              }
+              setModifierModalItem(null);
+            }}
+            activeRate={activeRate}
+          />
+        )
       }
 
       {
@@ -1583,13 +1591,6 @@ function App() {
           </div>
         )
       }
-      {showInstallModal && (
-        <InstallPromptModal
-          onClose={() => setShowInstallModal(false)}
-          onInstall={triggerNativeInstall}
-          platform={platform}
-        />
-      )}
     </>
   );
 }
