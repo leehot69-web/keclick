@@ -258,12 +258,24 @@ export const useSupabaseSync = (
             };
             worker.postMessage({ action: 'start', interval: 3000 });
         } catch (e) {
-            console.warn('Web Worker no soportado, usando setInterval fallback', e);
-            pollingInterval = setInterval(() => {
-                console.log('⚡ Polling simple...');
-                fetchData();
-            }, 3000);
+            console.warn('Web Worker no soportado', e);
         }
+
+        // BACKUP: Intervalo tradicional agresivo (por si el Worker muere)
+        pollingInterval = setInterval(() => {
+            console.log('⚡ Interval Backup Tick...');
+            fetchData();
+
+            // REINICIO DE CONEXIÓN INVISIBLE (Cada 3 ciclos ~ 9s)
+            // Si el socket murió, esto lo revive a la fuerza
+            if (Date.now() % 9000 < 3000) {
+                if (channel) {
+                    console.log('♻️ Reciclando conexión Realtime...');
+                    supabase.removeChannel(channel);
+                    subscribe(); // Re-conectar
+                }
+            }
+        }, 3000);
 
         const handleInteraction = () => {
             // Si el usuario toca la pantalla, refrescar si han pasado más de 2s
