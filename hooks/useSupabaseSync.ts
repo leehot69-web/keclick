@@ -411,6 +411,49 @@ export const useSupabaseSync = (
         if (error) console.error('Error syncing sale:', error);
     };
 
+    // SOLUCIÓN "SERVER VALIDATION" (Basado en recomendación del audio):
+    // Verifica si la orden sigue abierta o si ha cambiado antes de permitir el guardado
+    const safeSyncSale = async (sale: SaleRecord): Promise<{ success: boolean, remoteData?: SaleRecord }> => {
+        if (!currentStoreId) return { success: false };
+
+        try {
+            // 1. Consultar el estado REAL en el servidor justo antes de escribir
+            const { data: remoteData, error: fetchError } = await supabase
+                .from('sales')
+                .select('*')
+                .eq('id', sale.id)
+                .single();
+
+            if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 es "no encontrado", lo cual es ok si es nueva
+                console.error('Error verificando estado remoto:', fetchError);
+                return { success: false };
+            }
+
+            if (remoteData) {
+                const remoteMapped = mapSaleFromSupabase(remoteData);
+
+                // Si la orden remota está CERRADA y nosotros intentamos actualizarla como si estuviera abierta, RECHAZAMOS.
+                if (remoteMapped.closed && !sale.closed) {
+                    console.warn('❌ Bloqueado: Intento de modificar una orden ya cerrada en el servidor.');
+                    return { success: false, remoteData: remoteMapped };
+                }
+
+                // Si la orden remota fue ANULADA, RECHAZAMOS.
+                if (remoteMapped.notes === 'ANULADO') {
+                    console.warn('❌ Bloqueado: Intento de modificar una orden anulada.');
+                    return { success: false, remoteData: remoteMapped };
+                }
+            }
+
+            // 2. Si pasa las validaciones, procedemos con el sync normal
+            await syncSale(sale);
+            return { success: true };
+        } catch (err) {
+            console.error('Error en safeSyncSale:', err);
+            return { success: false };
+        }
+    };
+
     const syncSettings = async (newSettings: AppSettings) => {
         if (!currentStoreId) return;
         const { error } = await supabase.from('settings').upsert({
@@ -450,5 +493,5 @@ export const useSupabaseSync = (
         if (error) console.error('Error syncing closure:', error);
     };
 
-    return { syncSale, syncSettings, syncClosure, refreshData: fetchData, syncStatus, lastSyncTime, forceRenderCount };
+    return { syncSale, safeSyncSale, syncSettings, syncClosure, refreshData: fetchData, syncStatus, lastSyncTime, forceRenderCount };
 };

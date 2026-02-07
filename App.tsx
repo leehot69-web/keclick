@@ -249,7 +249,7 @@ function App() {
   };
 
   // --- ESCUCHA DE SUPABASE ---
-  const { syncSale, syncSettings, syncClosure, refreshData, syncStatus, lastSyncTime, forceRenderCount } = useSupabaseSync(
+  const { syncSale, safeSyncSale, syncSettings, syncClosure, refreshData, syncStatus, lastSyncTime, forceRenderCount } = useSupabaseSync(
     settings,
     setSettings,
     reports,
@@ -450,8 +450,15 @@ function App() {
     });
 
     // Enviar los cambios a Supabase para que persistan y se sincronicen en otros equipos
-    setTimeout(() => {
-      updatedReports.forEach(r => syncSale(r));
+    // SOLUCIÓN "SERVER VALIDATION": Usamos safeSyncSale para no pisar cierres ajenos
+    setTimeout(async () => {
+      for (const r of updatedReports) {
+        const result = await safeSyncSale(r);
+        if (!result.success) {
+          console.error("Conflict detected while serving items:", r.id);
+          // Opcional: Avisar discretamente o refrescar
+        }
+      }
     }, 100);
   };
 
@@ -975,17 +982,23 @@ function App() {
       const filtered = editingReportId ? prev.filter(r => r.id !== editingReportId) : prev;
       return [newReport, ...filtered];
     });
-    syncSale(newReport);
 
-    // Guardar para la pantalla de éxito antes de limpiar
-    setLastSoldRecord({ cart: [...cart], details: { ...customerDetails } });
+    // SOLUCIÓN "SERVER VALIDATION": Usamos safeSyncSale con manejo de conflictos
+    safeSyncSale(newReport).then((result) => {
+      if (!result.success) {
+        alert("⚠️ ERROR DE COORDINACIÓN:\n\nEsta mesa ya fue cerrada, anulada o modificada por otro usuario mientras preparabas el pedido.\n\nTu pantalla se actualizará ahora con la información real.");
+        refreshData(); // Forzar carga limpia del servidor
+        return;
+      }
 
-    setCart([]);
-    setEditingReportId(null);
-    setCustomerDetails({ name: '', phone: '', paymentMethod: 'Efectivo', instructions: '' });
-    setCustomerDetails({ name: '', phone: '', paymentMethod: 'Efectivo', instructions: '' });
-    setRemovalReasons({});
-    setCurrentView('success');
+      // Si todo salió bien, procedemos con el éxito
+      setLastSoldRecord({ cart: [...cart], details: { ...customerDetails } });
+      setCart([]);
+      setEditingReportId(null);
+      setCustomerDetails({ name: '', phone: '', paymentMethod: 'Efectivo', instructions: '' });
+      setRemovalReasons({});
+      setCurrentView('success');
+    });
   };
 
   const handleStartNewOrder = () => {
@@ -1246,7 +1259,7 @@ function App() {
                     reports={reports}
                     settings={settings}
                     currentUser={currentUser}
-                    onUpdateItemStatus={(reportId, itemId, stationId, status) => {
+                    onUpdateItemStatus={async (reportId, itemId, stationId, status) => {
                       let updatedReportToSync: SaleRecord | null = null;
                       const updatedReports = reports.map(r => {
                         if (r.id !== reportId) return r;
@@ -1264,15 +1277,32 @@ function App() {
                         updatedReportToSync = updated;
                         return updated;
                       });
-                      setReports(updatedReports);
-                      if (updatedReportToSync) syncSale(updatedReportToSync);
-                    }}
-                    onCloseOrder={(reportId) => {
-                      if (window.confirm("¿Terminar comanda?")) {
-                        const updatedReports = reports.map(r => r.id === reportId ? { ...r, closed: true } : r);
+
+                      if (updatedReportToSync) {
+                        const result = await safeSyncSale(updatedReportToSync);
+                        if (!result.success) {
+                          alert("⚠️ COMANDA DESACTUALIZADA:\nEl mesero ya cerró o anuló esta orden. No se puede actualizar el estado.");
+                          refreshData();
+                          return;
+                        }
                         setReports(updatedReports);
-                        const closedReport = updatedReports.find(r => r.id === reportId);
-                        if (closedReport) syncSale(closedReport);
+                      }
+                    }}
+                    onCloseOrder={async (reportId) => {
+                      if (window.confirm("¿Terminar comanda?")) {
+                        const targetReport = reports.find(r => r.id === reportId);
+                        if (!targetReport) return;
+
+                        const updated: SaleRecord = { ...targetReport, closed: true };
+                        const result = await safeSyncSale(updated);
+
+                        if (!result.success) {
+                          alert("⚠️ COMANDA YA GESTIONADA:\nEl mesero ya cerró o modificó esta orden.");
+                          refreshData();
+                          return;
+                        }
+
+                        setReports(prev => prev.map(r => r.id === reportId ? updated : r));
                       }
                     }}
                     onLogout={handleLogout}
