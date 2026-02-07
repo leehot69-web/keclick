@@ -521,9 +521,7 @@ function App() {
 
   const triggerNativeInstall = async () => {
     if (!deferredPrompt) {
-      // Si no hay prompt diferido, cerramos el modal y quizás mostramos un aviso
       setShowInstallModal(false);
-      alert("Para instalar, por favor abre el menú de opciones de tu navegador y busca 'Instalar aplicación'.");
       return;
     }
 
