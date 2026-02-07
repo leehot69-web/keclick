@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 // Nombre de la base de datos y almacén
 const DB_NAME = 'SistemaPedidosDB';
@@ -84,31 +84,31 @@ export function useLocalStorage<T>(key: string, initialValue: T | (() => T)): [T
       if (isMounted && value !== undefined && value !== null) {
         setStoredValue(value);
         // Sincronizar caché de localStorage
-        try { window.localStorage.setItem(key, JSON.stringify(value)); } catch(e) {}
+        try { window.localStorage.setItem(key, JSON.stringify(value)); } catch (e) { }
       }
     }).catch(err => console.warn('Error cargando de DB:', err));
 
     return () => { isMounted = false; };
   }, [key]);
 
-  // Función para actualizar el valor
-  const setValue = (value: T | ((val: T) => T)) => {
+  // Función para actualizar el valor (Memorizada para evitar bucles infinitos)
+  const setValue = useCallback((value: T | ((val: T) => T)) => {
     try {
-      const valueToStore = value instanceof Function ? value(storedValue) : value;
-      
-      // 1. Actualizar estado (React)
-      setStoredValue(valueToStore);
-      
-      // 2. Persistir en localStorage (Caché rápido)
-      window.localStorage.setItem(key, JSON.stringify(valueToStore));
-      
-      // 3. Persistir en IndexedDB ("Dijn" - Fuente de verdad robusta)
-      dbManager.set(key, valueToStore).catch(err => console.error('Error guardando en DB:', err));
-      
+      setStoredValue(prev => {
+        const valueToStore = value instanceof Function ? value(prev) : value;
+
+        // 2. Persistir en localStorage (Caché rápido)
+        try { window.localStorage.setItem(key, JSON.stringify(valueToStore)); } catch (e) { }
+
+        // 3. Persistir en IndexedDB ("Dijn")
+        dbManager.set(key, valueToStore).catch(err => console.error('Error guardando en DB:', err));
+
+        return valueToStore;
+      });
     } catch (error) {
       console.error('Error en setValue:', error);
     }
-  };
+  }, [key]);
 
   // Escuchar cambios desde otras pestañas/ventanas
   useEffect(() => {
@@ -117,7 +117,7 @@ export function useLocalStorage<T>(key: string, initialValue: T | (() => T)): [T
         try {
           const parsed = JSON.parse(e.newValue);
           if (parsed !== null && parsed !== undefined) setStoredValue(parsed);
-        } catch (e) {}
+        } catch (e) { }
       }
     };
     window.addEventListener('storage', handleStorageChange);
