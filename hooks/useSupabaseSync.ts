@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '../utils/supabase';
+import { RealtimeChannel } from '@supabase/supabase-js';
 import { AppSettings, SaleRecord, DayClosure, StoreProfile } from '../types';
 
 export const useSupabaseSync = (
@@ -15,7 +16,18 @@ export const useSupabaseSync = (
 ) => {
     const [syncStatus, setSyncStatus] = useState<'connecting' | 'online' | 'offline' | 'polling'>('connecting');
     const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
+    // SOLUCIÓN REACTIVIDAD: Contador que fuerza re-render cuando llegan datos
+    const [forceRenderCount, setForceRenderCount] = useState(0);
     const lastFetchRef = useRef<number>(Date.now());
+    // Referencia al estado de sync para que el Worker pueda leerlo
+    const syncStatusRef = useRef<string>('connecting');
+
+    // Función para forzar re-render de la UI
+    const forceUIUpdate = () => {
+        setForceRenderCount(prev => prev + 1);
+        setLastSyncTime(new Date());
+        console.log('🔄 Forzando actualización de UI...');
+    };
     const mapSaleFromSupabase = (s: any): SaleRecord => ({
         ...s,
         id: s.id,
@@ -94,7 +106,18 @@ export const useSupabaseSync = (
     useEffect(() => {
         if (!currentStoreId) return;
 
-        let channel: any;
+        // MEJORA 2: WakeLock Automático (Global)
+        // Mantiene el dispositivo despierto mientras la app está activa
+        if ('wakeLock' in navigator) {
+            try {
+                navigator.wakeLock.request('screen');
+                console.log('💡 WakeLock Global solicitado');
+            } catch (err) {
+                console.warn('WakeLock no disponible:', err);
+            }
+        }
+
+        let channel: RealtimeChannel | null = null;
         let pollingInterval: any;
 
         const fetchData = async () => {
@@ -108,12 +131,24 @@ export const useSupabaseSync = (
                     .from('sales')
                     .select('*')
                     .eq('store_id', currentStoreId)
-                    .order('created_at', { ascending: false });
+                    .order('created_at', { ascending: false })
+                    .limit(60);
 
                 if (salesData) {
-                    // FORCE RE-RENDER (Polling): Ensure new reference
-                    setReports([...salesData.map(mapSaleFromSupabase)]);
-                    setLastSyncTime(new Date());
+                    const mapped = salesData.map(mapSaleFromSupabase);
+
+                    // Solo actualizar si la cantidad de pedidos cambió o si el contenido es distinto
+                    // (Usamos JSON.stringify como una forma rápida y efectiva de comparar contenido de objetos)
+                    const currentDataStr = JSON.stringify(reports);
+                    const newDataStr = JSON.stringify(mapped);
+
+                    if (currentDataStr !== newDataStr) {
+                        console.log('✨ Datos nuevos detectados, actualizando UI...');
+                        setReports(mapped);
+                        forceUIUpdate();
+                    } else {
+                        // console.log('😴 Sin cambios en los datos.');
+                    }
                 }
 
                 // Cierres
@@ -200,13 +235,18 @@ export const useSupabaseSync = (
                         setReports(prev => {
                             if (payload.eventType === 'INSERT') {
                                 if (prev.some(r => r.id === fullSale.id)) return prev;
+                                console.log('✅ Nuevo pedido recibido en tiempo real:', fullSale.id);
                                 return [fullSale, ...prev];
                             } else {
+                                console.log('📝 Pedido actualizado en tiempo real:', fullSale.id);
                                 return prev.map(r => r.id === fullSale.id ? fullSale : r);
                             }
                         });
+                        // SOLUCIÓN REACTIVIDAD: Forzar actualización de UI después de cada cambio
+                        forceUIUpdate();
                     } else if (payload.eventType === 'DELETE') {
                         setReports(prev => prev.filter(r => r.id !== payloadData.id));
+                        forceUIUpdate();
                     }
                 })
                 .on('postgres_changes', {
@@ -230,69 +270,93 @@ export const useSupabaseSync = (
                             if (prev.some(c => c.id === mappedClosure.id)) return prev;
                             return [mappedClosure, ...prev];
                         });
+                        forceUIUpdate();
                     }
                 })
                 .subscribe((status) => {
                     if (status === 'SUBSCRIBED') {
                         setSyncStatus('online');
-                        console.log('✅ Realtime Activo (Patrón Casino):', currentStoreId);
+                        console.log('✅ Realtime Activo:', currentStoreId);
                     }
                     if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
                         setSyncStatus('polling');
-                        console.warn('⚠️ Conexión Realtime caída. Plan de respaldo activo.');
+                        console.warn('⚠️ Conexión Realtime caída. Activando polling de respaldo.');
                     }
                 });
         };
 
         subscribe();
 
-        // POLL ROBUSTO CON WEB WORKER (Evita throttling en background)
+        // ============================================================
+        // MEJORA 1 + 3: POLLING INTELIGENTE (Solo cuando Realtime falla)
+        // ============================================================
+        // El Worker es el ÚNICO mecanismo de polling (eliminamos setInterval duplicado)
+        // Solo hace fetch cuando syncStatus NO es 'online'
         let worker: Worker | null = null;
-        try {
-            worker = new Worker('/pollingWorker.js');
-            worker.onmessage = (e) => {
-                if (e.data === 'tick') {
-                    console.log('⚡ Worker Tick - Polling...');
-                    fetchData();
-                }
-            };
-            worker.postMessage({ action: 'start', interval: 3000 });
-        } catch (e) {
-            console.warn('Web Worker no soportado', e);
-        }
+        let isWorkerActive = false;
 
-        // BACKUP: Intervalo tradicional agresivo (por si el Worker muere)
-        pollingInterval = setInterval(() => {
-            console.log('⚡ Interval Backup Tick...');
-            fetchData();
+        const startWorkerPolling = () => {
+            if (isWorkerActive || worker) return;
 
-            // REINICIO DE CONEXIÓN INVISIBLE (Cada 3 ciclos ~ 9s)
-            // Si el socket murió, esto lo revive a la fuerza
-            if (Date.now() % 9000 < 3000) {
-                if (channel) {
-                    console.log('♻️ Reciclando conexión Realtime...');
-                    supabase.removeChannel(channel);
-                    subscribe(); // Re-conectar
-                }
-            }
-        }, 3000);
+            try {
+                worker = new Worker('/pollingWorker.js');
+                let tickCount = 0;
 
-        const handleInteraction = () => {
-            // Si el usuario toca la pantalla, refrescar si han pasado más de 2s
-            if (Date.now() - lastFetchRef.current > 2000) {
-                console.log('👆 Interacción detectada - Refrescando...');
-                fetchData();
+                worker.onmessage = (e) => {
+                    if (e.data === 'tick') {
+                        tickCount++;
+                        const isOnline = syncStatusRef.current === 'online';
+
+                        // LÓGICA DE PULSO INTELIGENTE:
+                        // Si está Offline/Polling: Cada 3 segundos (tickCount % 1)
+                        // Si está Online: Cada 21 segundos (tickCount % 7) como backup
+                        const shouldFetch = !isOnline || (tickCount % 7 === 0);
+
+                        if (shouldFetch) {
+                            if (!isOnline) {
+                                console.log('⚡ Worker Polling agresivo (Realtime caído)...');
+                            } else {
+                                console.log('�️ Worker Safety Pulse (Backup remoto)...');
+                            }
+                            fetchData();
+                        }
+                    }
+                };
+                // Tick del worker cada 3 segundos
+                worker.postMessage({ action: 'start', interval: 3000 });
+                isWorkerActive = true;
+                console.log('🔧 Worker de respaldo inteligente iniciado');
+            } catch (e) {
+                console.warn('Web Worker no soportado', e);
             }
         };
 
-        window.addEventListener('click', handleInteraction);
-        window.addEventListener('touchstart', handleInteraction);
+        startWorkerPolling();
 
+        // ============================================================
+        // RECONEXIÓN SILENCIOSA DEL WEBSOCKET (Cada 30s si está en 'polling')
+        // ============================================================
+        const reconnectInterval = setInterval(() => {
+            if (syncStatusRef.current === 'polling' || syncStatusRef.current === 'offline') {
+                console.log('♻️ Intentando reconectar Realtime...');
+                if (channel) {
+                    supabase.removeChannel(channel);
+                }
+                subscribe();
+            }
+        }, 30000); // Cada 30 segundos, no cada 9
+
+        // Evento para cuando el usuario vuelve a la app
         const handleAutoRefresh = () => {
-            console.log('📱 Despertando App - Refrescando todo...');
-            fetchData();
-            // Forzar actualización de suscripción por si el navegador mató el WebSocket
-            subscribe();
+            console.log('📱 Despertando App - Verificando conexión...');
+            // Solo refrescar si han pasado más de 5 segundos desde el último fetch
+            if (Date.now() - lastFetchRef.current > 5000) {
+                fetchData();
+            }
+            // Re-suscribir por si el WebSocket murió
+            if (syncStatusRef.current !== 'online') {
+                subscribe();
+            }
         };
 
         window.addEventListener('focus', handleAutoRefresh);
@@ -310,15 +374,20 @@ export const useSupabaseSync = (
                 worker.postMessage({ action: 'stop' });
                 worker.terminate();
             }
-            if (pollingInterval) clearInterval(pollingInterval);
+            clearInterval(reconnectInterval);
             window.removeEventListener('focus', handleAutoRefresh);
             window.removeEventListener('online', handleAutoRefresh);
-            window.removeEventListener('click', handleInteraction);
-            window.removeEventListener('touchstart', handleInteraction);
             document.removeEventListener('visibilitychange', visibilityHandler);
             if (channel) supabase.removeChannel(channel);
         };
     }, [currentStoreId, setReports, setDayClosures]);
+
+    // Efecto para mantener sincronizada la referencia del syncStatus
+    // CRÍTICO: El Worker lee syncStatusRef.current para saber si debe hacer polling
+    useEffect(() => {
+        syncStatusRef.current = syncStatus;
+        console.log('📊 Estado de sync actualizado:', syncStatus);
+    }, [syncStatus]);
 
     // 3. Funciones de Sincronización
     const syncSale = async (sale: SaleRecord) => {
@@ -381,5 +450,5 @@ export const useSupabaseSync = (
         if (error) console.error('Error syncing closure:', error);
     };
 
-    return { syncSale, syncSettings, syncClosure, refreshData: fetchData, syncStatus, lastSyncTime };
+    return { syncSale, syncSettings, syncClosure, refreshData: fetchData, syncStatus, lastSyncTime, forceRenderCount };
 };

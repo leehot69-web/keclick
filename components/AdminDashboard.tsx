@@ -10,6 +10,7 @@ interface AdminDashboardProps {
     onVoidOrder: (reportId: string) => void;
     onReprintOrder: (sale: SaleRecord) => void;
     isPrinterConnected: boolean;
+    forceRenderCount?: number;
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -19,13 +20,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     onEditOrder,
     onVoidOrder,
     onReprintOrder,
-    isPrinterConnected
+    isPrinterConnected,
+    forceRenderCount = 0
 }) => {
     const activeRate = settings.activeExchangeRate === 'bcv' ? settings.exchangeRateBCV : settings.exchangeRateParallel;
     const today = new Date().toISOString().split('T')[0];
 
     // Filtros de datos para el día de hoy
-    const todayReports = useMemo(() => reports.filter(r => r.date === today), [reports, today]);
+    // SOLUCIÓN REACTIVIDAD: forceRenderCount garantiza actualización en tiempo real
+    const todayReports = useMemo(() => reports.filter(r => r.date === today), [reports, today, forceRenderCount]);
 
     const stats = useMemo(() => {
         const paid = todayReports.reduce((acc, r) => {

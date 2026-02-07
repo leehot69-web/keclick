@@ -17,6 +17,8 @@ interface ReportsScreenProps {
     onEditPendingReport: (report: SaleRecord, targetView?: View) => void;
     onVoidReport: (reportId: string) => void;
     isAdmin: boolean;
+    // SOLUCIÓN REACTIVIDAD: Fuerza re-render cuando llegan datos nuevos
+    forceRenderCount?: number;
 }
 
 const DayClosureModal: React.FC<{
@@ -72,13 +74,14 @@ const DayClosureModal: React.FC<{
     );
 };
 
-const ReportsScreen: React.FC<ReportsScreenProps> = ({ reports, dayClosures, onGoToTables, onDeleteReports, storeProfile, settings, onStartNewDay, currentWaiter, onOpenSalesHistory, onReprintSaleRecord, isPrinterConnected, onEditPendingReport, onVoidReport, isAdmin }) => {
+const ReportsScreen: React.FC<ReportsScreenProps> = ({ reports, dayClosures, onGoToTables, onDeleteReports, storeProfile, settings, onStartNewDay, currentWaiter, onOpenSalesHistory, onReprintSaleRecord, isPrinterConnected, onEditPendingReport, onVoidReport, isAdmin, forceRenderCount = 0 }) => {
     const [activeSale, setActiveSale] = useState<SaleRecord | null>(null);
     const [showClosureModal, setShowClosureModal] = useState(false);
     const [showClosuresHistory, setShowClosuresHistory] = useState(false);
     const exchangeRate = settings ? (settings.activeExchangeRate === 'bcv' ? settings.exchangeRateBCV : settings.exchangeRateParallel) : 1;
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
+    // SOLUCIÓN REACTIVIDAD: forceRenderCount garantiza actualización cuando llegan cambios de cocina
     const filteredByWaiterAndDate = useMemo(() => {
         const waiterName = (currentWaiter || '').toLowerCase().trim();
         return reports.filter(r => {
@@ -87,7 +90,7 @@ const ReportsScreen: React.FC<ReportsScreenProps> = ({ reports, dayClosures, onG
             const isTargetWaiter = isAdmin ? true : reportWaiter === waiterName;
             return isTargetWaiter && reportDate === selectedDate;
         });
-    }, [reports, currentWaiter, selectedDate, isAdmin]);
+    }, [reports, currentWaiter, selectedDate, isAdmin, forceRenderCount]);
 
     // Si es admin, queremos ver el total GLOBAL del día, incluyendo lo que ya se cerró.
     // Si es mesero, solo lo que tiene "en caja" sin cerrar.

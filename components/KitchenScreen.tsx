@@ -12,6 +12,8 @@ interface KitchenScreenProps {
     onManualSync?: () => void;
     syncStatus?: 'connecting' | 'online' | 'offline' | 'polling';
     lastSyncTime?: Date;
+    // SOLUCIÓN REACTIVIDAD: Contador que fuerza re-render
+    forceRenderCount?: number;
 }
 
 const KitchenScreen: React.FC<KitchenScreenProps> = ({
@@ -23,20 +25,26 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({
     onLogout,
     onManualSync,
     syncStatus = 'online',
-    lastSyncTime
+    lastSyncTime,
+    forceRenderCount = 0
 }) => {
     const today = new Date().toISOString().split('T')[0];
     const [now, setNow] = useState(new Date());
     const [pinnedOrders, setPinnedOrders] = useState<string[]>([]);
     const [isWakeLockActive, setIsWakeLockActive] = useState(false);
 
+    // MEJORA 2: WakeLock Automático al entrar a cocina
+    useEffect(() => {
+        enableWakeLock(true); // true = silencioso
+    }, []);
+
     // Activar Wake Lock (Pantalla y Audio Fantasma para móviles)
-    const enableWakeLock = async () => {
+    const enableWakeLock = async (silent = false) => {
         try {
             // 1. Screen Wake Lock API
             if ('wakeLock' in navigator) {
                 // @ts-ignore
-                const wakeLock = await navigator.wakeLock.request('screen');
+                await navigator.wakeLock.request('screen');
                 console.log('💡 Wake Lock activo');
             }
 
@@ -50,10 +58,14 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({
             oscillator.start();
 
             setIsWakeLockActive(true);
-            alert('📱 MODO "SIEMPRE ENCENDIDO" ACTIVADO\n\nEl dispositivo no se dormirá y sincronizará en tiempo real.\n(Puede consumir más batería)');
+            if (!silent) {
+                alert('📱 MODO "SIEMPRE ENCENDIDO" ACTIVADO\n\nEl dispositivo no se dormirá y sincronizará en tiempo real.\n(Puede consumir más batería)');
+            }
         } catch (err) {
             console.error('Error activating wake lock:', err);
-            alert('No se pudo activar el modo "Siempre Encendido". Revisa los permisos.');
+            if (!silent) {
+                alert('No se pudo activar el modo "Siempre Encendido". Revisa los permisos.');
+            }
         }
     };
 
@@ -94,14 +106,16 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({
     };
 
     // Filtrar pedidos de hoy que no han sido cerrados o anulados
+    // SOLUCIÓN REACTIVIDAD: forceRenderCount como dependencia extra para garantizar re-render
     const activeOrders = useMemo(() => {
+        console.log('🔄 Recalculando activeOrders... (forceRenderCount:', forceRenderCount, ')');
         const active = reports.filter(r =>
             r.date === today &&
             r.notes !== 'ANULADO' &&
             !r.closed
         );
         return active.filter(order => getItemsForStation(order).length > 0);
-    }, [reports, today, userStation]);
+    }, [reports, today, userStation, forceRenderCount]);
 
     // Calcular tiempo transcurrido
     const getElapsedTime = (createdAt?: string) => {
@@ -139,7 +153,7 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({
 
     return (
         <div className="h-screen flex flex-col bg-gray-900 text-white overflow-hidden font-sans">
-            <header className="bg-gray-800 p-4 flex justify-between items-center shrink-0 border-b border-gray-700">
+            <header className="bg-gray-800 py-6 px-10 flex justify-between items-center shrink-0 border-b border-gray-700">
                 <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-green-500 rounded-xl flex items-center justify-center">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -198,9 +212,9 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({
                         <p className="text-sm text-gray-600 font-medium">Esperando nuevos pedidos...</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-start">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
                         {activeOrders.map(order => (
-                            <div key={order.id} className={`rounded-3xl overflow-hidden border flex flex-col transition-all duration-300 ${pinnedOrders.includes(order.id) ? 'bg-gray-800 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)] scale-[1.02] z-10' : 'bg-gray-800 border-gray-700/50'}`}>
+                            <div key={order.id} className={`rounded-2xl overflow-hidden border flex flex-col transition-all duration-300 ${pinnedOrders.includes(order.id) ? 'bg-gray-800 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)] scale-[1.02] z-10' : 'bg-gray-800 border-gray-700/50'}`}>
                                 <div className="bg-gray-700/50 p-4 border-b border-gray-700 flex justify-between items-center relative">
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
