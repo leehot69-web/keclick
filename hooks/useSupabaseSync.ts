@@ -232,13 +232,13 @@ export const useSupabaseSync = (
 
         subscribe();
 
-        // POLL FALLBACK ULTRAAGRESIVO (Cada 3 segundos SIEMPRE)
+        // POLL FALLBACK ULTRARRÁPIDO (Cada 1.5 segundos SIEMPRE)
         pollingInterval = setInterval(() => {
-            // Si han pasado más de 4 segundos sin novedades, forzar descarga
-            if (Date.now() - lastFetchRef.current > 4000) {
+            // Si han pasado más de 2 segundos sin novedades, forzar descarga
+            if (Date.now() - lastFetchRef.current > 2000) {
                 fetchData();
             }
-        }, 3000);
+        }, 1500);
 
         const handleAutoRefresh = () => {
             console.log('📱 Despertando App - Refrescando todo...');
