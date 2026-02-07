@@ -1318,6 +1318,8 @@ function App() {
                   }
                 }}
                 onLogout={handleLogout}
+                onManualSync={handleManualSync}
+                syncStatus={syncStatus}
               />;
               case 'success': return <SuccessScreen cart={lastSoldRecord?.cart || []} customerDetails={lastSoldRecord?.details || customerDetails} onStartNewOrder={handleStartNewOrder} onReprint={() => handlePrintOrder(undefined, true)} isPrinterConnected={isPrinterConnected} activeRate={activeRate} />;
               default: return null;

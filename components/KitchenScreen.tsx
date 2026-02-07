@@ -9,6 +9,8 @@ interface KitchenScreenProps {
     onUpdateItemStatus: (reportId: string, itemId: string, stationId: string, status: 'pending' | 'preparing' | 'ready') => void;
     onCloseOrder: (reportId: string) => void;
     onLogout: () => void;
+    onManualSync?: () => void;
+    syncStatus?: 'connecting' | 'online' | 'offline' | 'polling';
 }
 
 const KitchenScreen: React.FC<KitchenScreenProps> = ({
@@ -17,17 +19,23 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({
     currentUser,
     onUpdateItemStatus,
     onCloseOrder,
-    onLogout
+    onLogout,
+    onManualSync,
+    syncStatus = 'online'
 }) => {
     const today = new Date().toISOString().split('T')[0];
     const [now, setNow] = useState(new Date());
     const [pinnedOrders, setPinnedOrders] = useState<string[]>([]);
 
-    // Actualizar el tiempo cada minuto
+    // Actualizar el tiempo cada 10 segundos (más responsivo)
     useEffect(() => {
-        const timer = setInterval(() => setNow(new Date()), 60000);
+        const timer = setInterval(() => setNow(new Date()), 10000);
         return () => clearInterval(timer);
     }, []);
+
+    // Estado para mostrar animación cuando llegan nuevos pedidos
+    const [lastOrderCount, setLastOrderCount] = useState(0);
+    const [showNewOrderPulse, setShowNewOrderPulse] = useState(false);
 
     // Obtener la estación del cocinero actual (o 'all' si es admin)
     const userStation = currentUser?.role === 'cocinero'
@@ -102,8 +110,20 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
+                    {/* Indicador de Sync */}
+                    <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold uppercase ${syncStatus === 'online' ? 'bg-green-500/20 text-green-400' : syncStatus === 'polling' ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'}`}>
+                        <div className={`w-2 h-2 rounded-full ${syncStatus === 'online' ? 'bg-green-400 animate-pulse' : syncStatus === 'polling' ? 'bg-amber-400 animate-pulse' : 'bg-red-400'}`}></div>
+                        {syncStatus === 'online' ? 'VIVO' : syncStatus === 'polling' ? 'AUTO' : 'OFF'}
+                    </div>
+                    {onManualSync && (
+                        <button onClick={onManualSync} className="p-3 bg-blue-500/20 text-blue-400 rounded-xl hover:bg-blue-500/30 transition-colors" title="Sincronizar">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                        </button>
+                    )}
                     <div className="text-right">
-                        <p className="text-3xl font-black tabular-nums">{activeOrders.length}</p>
+                        <p className={`text-3xl font-black tabular-nums ${showNewOrderPulse ? 'text-green-400 animate-bounce' : ''}`}>{activeOrders.length}</p>
                         <p className="text-[9px] text-gray-400 font-bold uppercase">Comandas</p>
                     </div>
                     <button onClick={onLogout} className="p-3 bg-red-500/20 text-red-400 rounded-xl hover:bg-red-500/30 transition-colors">
