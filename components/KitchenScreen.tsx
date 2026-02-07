@@ -106,7 +106,7 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({
                     </div>
                     <div>
                         <h1 className="text-xl font-black uppercase tracking-tight">{stationName}</h1>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase">{currentUser?.name} • {today}</p>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase">{currentUser?.name} • {today} • ID:{settings.storeId?.slice(-4)} • R:{reports.length}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
