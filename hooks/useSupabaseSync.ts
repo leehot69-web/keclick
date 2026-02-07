@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '../utils/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { AppSettings, SaleRecord, DayClosure, StoreProfile } from '../types';
@@ -389,8 +389,8 @@ export const useSupabaseSync = (
         console.log('📊 Estado de sync actualizado:', syncStatus);
     }, [syncStatus]);
 
-    // 3. Funciones de Sincronización
-    const syncSale = async (sale: SaleRecord) => {
+    // 3. Funciones de Sincronización (Memorizadas para estabilidad)
+    const syncSale = useCallback(async (sale: SaleRecord) => {
         if (!currentStoreId) return;
         const { error } = await supabase.from('sales').upsert({
             id: sale.id,
@@ -409,52 +409,35 @@ export const useSupabaseSync = (
             audit_notes: sale.auditNotes
         });
         if (error) console.error('Error syncing sale:', error);
-    };
+    }, [currentStoreId]);
 
-    // SOLUCIÓN "SERVER VALIDATION" (Basado en recomendación del audio):
-    // Verifica si la orden sigue abierta o si ha cambiado antes de permitir el guardado
-    const safeSyncSale = async (sale: SaleRecord): Promise<{ success: boolean, remoteData?: SaleRecord }> => {
+    const safeSyncSale = useCallback(async (sale: SaleRecord): Promise<{ success: boolean, remoteData?: SaleRecord }> => {
         if (!currentStoreId) return { success: false };
 
         try {
-            // 1. Consultar el estado REAL en el servidor justo antes de escribir
             const { data: remoteData, error: fetchError } = await supabase
                 .from('sales')
                 .select('*')
                 .eq('id', sale.id)
                 .single();
 
-            if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 es "no encontrado", lo cual es ok si es nueva
-                console.error('Error verificando estado remoto:', fetchError);
-                return { success: false };
-            }
+            if (fetchError && fetchError.code !== 'PGRST116') return { success: false };
 
             if (remoteData) {
                 const remoteMapped = mapSaleFromSupabase(remoteData);
-
-                // Si la orden remota está CERRADA y nosotros intentamos actualizarla como si estuviera abierta, RECHAZAMOS.
-                if (remoteMapped.closed && !sale.closed) {
-                    console.warn('❌ Bloqueado: Intento de modificar una orden ya cerrada en el servidor.');
-                    return { success: false, remoteData: remoteMapped };
-                }
-
-                // Si la orden remota fue ANULADA, RECHAZAMOS.
-                if (remoteMapped.notes === 'ANULADO') {
-                    console.warn('❌ Bloqueado: Intento de modificar una orden anulada.');
-                    return { success: false, remoteData: remoteMapped };
-                }
+                if (remoteMapped.closed && !sale.closed) return { success: false, remoteData: remoteMapped };
+                if (remoteMapped.notes === 'ANULADO') return { success: false, remoteData: remoteMapped };
             }
 
-            // 2. Si pasa las validaciones, procedemos con el sync normal
             await syncSale(sale);
             return { success: true };
         } catch (err) {
             console.error('Error en safeSyncSale:', err);
             return { success: false };
         }
-    };
+    }, [currentStoreId, syncSale]);
 
-    const syncSettings = async (newSettings: AppSettings) => {
+    const syncSettings = useCallback(async (newSettings: AppSettings) => {
         if (!currentStoreId) return;
         const { error } = await supabase.from('settings').upsert({
             store_id: currentStoreId,
@@ -473,9 +456,9 @@ export const useSupabaseSync = (
             updated_at: new Date().toISOString()
         });
         if (error) console.error('Error syncing settings:', error);
-    };
+    }, [currentStoreId]);
 
-    const syncClosure = async (closure: DayClosure) => {
+    const syncClosure = useCallback(async (closure: DayClosure) => {
         if (!currentStoreId) return;
         const { error } = await supabase.from('day_closures').insert({
             id: closure.id,
@@ -491,7 +474,17 @@ export const useSupabaseSync = (
             report_ids: closure.reportIds
         });
         if (error) console.error('Error syncing closure:', error);
-    };
+    }, [currentStoreId]);
 
-    return { syncSale, safeSyncSale, syncSettings, syncClosure, refreshData: fetchData, syncStatus, lastSyncTime, forceRenderCount };
+    // Memorizar el objeto de retorno para estabilidad de los consumidores
+    return useMemo(() => ({
+        syncSale,
+        safeSyncSale,
+        syncSettings,
+        syncClosure,
+        refreshData: fetchData,
+        syncStatus,
+        lastSyncTime,
+        forceRenderCount
+    }), [syncSale, safeSyncSale, syncSettings, syncClosure, fetchData, syncStatus, lastSyncTime, forceRenderCount]);
 };
