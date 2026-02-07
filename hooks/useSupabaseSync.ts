@@ -18,6 +18,57 @@ export const useSupabaseSync = (
     const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
     // SOLUCIÓN REACTIVIDAD: Contador que fuerza re-render cuando llegan datos
     const [forceRenderCount, setForceRenderCount] = useState(0);
+
+    // --- LÓGICA DE SUPERVIVENCIA PWA (KEEP-ALIVE & WAKE LOCK) ---
+    const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+
+    const activateWakeLock = useCallback(async () => {
+        if ('wakeLock' in navigator && document.visibilityState === 'visible') {
+            try {
+                const wakeLock = await navigator.wakeLock.request('screen');
+                wakeLockRef.current = wakeLock;
+                console.log('🛡️ Wake Lock ACTIVADO: Pantalla no se apagará.');
+                wakeLock.addEventListener('release', () => {
+                    console.log('🛡️ Wake Lock liberado.');
+                });
+            } catch (err: any) {
+                console.warn(`⚠️ No se pudo activar Wake Lock: ${err.message}`);
+            }
+        }
+    }, []);
+
+    // Re-activar Wake Lock y refrescar datos si la pestaña vuelve a ser visible
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                console.log('👀 App visible (Focus Sync): Refrescando datos NOW...');
+                fetchData(); // Refresco inmediato (Focus Sync)
+                activateWakeLock(); // Re-asegurar pantalla encendida
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        activateWakeLock(); // Intentar activar al inicio
+
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            if (wakeLockRef.current) wakeLockRef.current.release();
+        };
+    }, [activateWakeLock]); // Dependencia circular mínima, fetchData se define después, usaremos referencia
+
+    // Polling Agresivo "Heartbeat" (Cada 2s)
+    // Mantiene la conexión caliente y sirve de respaldo si el WebSocket muere.
+    useEffect(() => {
+        if (!currentStoreId) return;
+
+        console.log('💓 Iniciando Heartbeat (Polling agresivo 2s)...');
+        const intervalId = setInterval(() => {
+            // Un fetch ligero para mantener el estado sincronizado
+            fetchData();
+        }, 2000);
+
+        return () => clearInterval(intervalId);
+    }, [currentStoreId]); // fetchData se añadirá a dependencias implícitamente al mover esto abajo o usar ref
     const lastFetchRef = useRef<number>(Date.now());
     // Referencia al estado de sync para que el Worker pueda leerlo
     const syncStatusRef = useRef<string>('connecting');
