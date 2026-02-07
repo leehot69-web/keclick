@@ -52,7 +52,7 @@ const InstallPromptModal: React.FC<InstallPromptModalProps> = ({ onClose, onInst
               </div>
             </div>
           ) : (
-            <div className="mb-8 px-2 space-y-4">
+            <div className="mb-8 px-2">
               <button
                 onClick={onInstall}
                 className="w-full py-5 bg-[#00D4AA] text-[#051a12] font-black rounded-2xl shadow-[0_12px_30px_rgba(0,212,170,0.3)] uppercase tracking-widest text-lg transform active:scale-95 transition-all flex items-center justify-center gap-3"
@@ -62,13 +62,6 @@ const InstallPromptModal: React.FC<InstallPromptModalProps> = ({ onClose, onInst
                 </svg>
                 Instalar Ahora
               </button>
-
-              <div className="p-4 bg-white/5 rounded-2xl border border-white/5 text-left">
-                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Si el botón no funciona:</p>
-                <p className="text-xs text-gray-400 leading-tight">
-                  Toca los tres puntos <span className="text-white font-black">⋮</span> del navegador y selecciona <span className="text-white font-black">Instalar aplicación</span> o <span className="text-white font-black">Agregar a pantalla de inicio</span>.
-                </p>
-              </div>
             </div>
           )}
 

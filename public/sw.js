@@ -1,6 +1,6 @@
 
 // Service worker para funcionamiento offline
-const CACHE_NAME = 'sistema-pedidos-v2';
+const CACHE_NAME = 'sistema-pedidos-v3';
 
 const URLS_TO_CACHE = [
   '/',

@@ -31,7 +31,7 @@
       "label": "Keclick"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
   "scope": "/",
   "id": "/?source=pwa",
   "display": "standalone",
