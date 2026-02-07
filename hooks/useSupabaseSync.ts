@@ -243,13 +243,23 @@ export const useSupabaseSync = (
 
         subscribe();
 
-        // POLL INSTANTÁNEO (Cada 1 segundo SIEMPRE)
+        // POLL CONSTANTE Y SIMPLE (Cada 3 segundos SIEMPRE)
+        // Eliminamos la lógica compleja de tiempos para asegurar que se ejecute en móviles
         pollingInterval = setInterval(() => {
-            // Si ha pasado más de 1.5 segundos sin novedades, forzar descarga
-            if (Date.now() - lastFetchRef.current > 1500) {
+            console.log('⚡ Polling forzado...');
+            fetchData();
+        }, 3000);
+
+        const handleInteraction = () => {
+            // Si el usuario toca la pantalla, refrescar si han pasado más de 2s
+            if (Date.now() - lastFetchRef.current > 2000) {
+                console.log('👆 Interacción detectada - Refrescando...');
                 fetchData();
             }
-        }, 1000);
+        };
+
+        window.addEventListener('click', handleInteraction);
+        window.addEventListener('touchstart', handleInteraction);
 
         const handleAutoRefresh = () => {
             console.log('📱 Despertando App - Refrescando todo...');
@@ -272,6 +282,8 @@ export const useSupabaseSync = (
             clearInterval(pollingInterval);
             window.removeEventListener('focus', handleAutoRefresh);
             window.removeEventListener('online', handleAutoRefresh);
+            window.removeEventListener('click', handleInteraction);
+            window.removeEventListener('touchstart', handleInteraction);
             document.removeEventListener('visibilitychange', visibilityHandler);
             if (channel) supabase.removeChannel(channel);
         };
