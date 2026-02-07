@@ -246,12 +246,24 @@ export const useSupabaseSync = (
 
         subscribe();
 
-        // POLL CONSTANTE Y SIMPLE (Cada 3 segundos SIEMPRE)
-        // Eliminamos la lógica compleja de tiempos para asegurar que se ejecute en móviles
-        pollingInterval = setInterval(() => {
-            console.log('⚡ Polling forzado...');
-            fetchData();
-        }, 3000);
+        // POLL ROBUSTO CON WEB WORKER (Evita throttling en background)
+        let worker: Worker | null = null;
+        try {
+            worker = new Worker('/pollingWorker.js');
+            worker.onmessage = (e) => {
+                if (e.data === 'tick') {
+                    console.log('⚡ Worker Tick - Polling...');
+                    fetchData();
+                }
+            };
+            worker.postMessage({ action: 'start', interval: 3000 });
+        } catch (e) {
+            console.warn('Web Worker no soportado, usando setInterval fallback', e);
+            pollingInterval = setInterval(() => {
+                console.log('⚡ Polling simple...');
+                fetchData();
+            }, 3000);
+        }
 
         const handleInteraction = () => {
             // Si el usuario toca la pantalla, refrescar si han pasado más de 2s
@@ -282,7 +294,11 @@ export const useSupabaseSync = (
         document.addEventListener('visibilitychange', visibilityHandler);
 
         return () => {
-            clearInterval(pollingInterval);
+            if (worker) {
+                worker.postMessage({ action: 'stop' });
+                worker.terminate();
+            }
+            if (pollingInterval) clearInterval(pollingInterval);
             window.removeEventListener('focus', handleAutoRefresh);
             window.removeEventListener('online', handleAutoRefresh);
             window.removeEventListener('click', handleInteraction);
