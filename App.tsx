@@ -503,12 +503,24 @@ function App() {
   };
 
   const triggerNativeInstall = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
+    if (!deferredPrompt) {
+      // Si no hay prompt diferido, cerramos el modal y quizás mostramos un aviso
+      setShowInstallModal(false);
+      alert("Para instalar, por favor abre el menú de opciones de tu navegador y busca 'Instalar aplicación'.");
+      return;
+    }
+
+    try {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log(`User response to the install prompt: ${outcome}`);
+
+      // Cerramos el modal independientemente del resultado
       setDeferredPrompt(null);
       setShowInstallBtn(false);
+      setShowInstallModal(false);
+    } catch (err) {
+      console.error("Error al intentar instalar:", err);
       setShowInstallModal(false);
     }
   };

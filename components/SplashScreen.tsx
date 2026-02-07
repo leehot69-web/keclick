@@ -7,7 +7,7 @@ interface SplashScreenProps {
 
 const SplashScreen: React.FC<SplashScreenProps> = ({ onEnter }) => {
   const [isLoaded, setIsLoaded] = useState(false);
-  const logoUrl = 'https://i.imgur.com/TXJrPwn.png';
+  const logoUrl = 'https://i.ibb.co/9HxvMhx/keclick-logo.png';
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoaded(true), 100);
