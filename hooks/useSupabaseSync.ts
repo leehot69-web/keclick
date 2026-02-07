@@ -48,7 +48,9 @@ export const useSupabaseSync = (
             .order('created_at', { ascending: false });
 
         if (salesData) {
-            setReports(salesData.map(mapSaleFromSupabase));
+            // FORCE RE-RENDER: Always create a new array reference
+            // This ensures React detects the change even if content is similar
+            setReports([...salesData.map(mapSaleFromSupabase)]);
         }
 
         // Cierres
@@ -109,7 +111,8 @@ export const useSupabaseSync = (
                     .order('created_at', { ascending: false });
 
                 if (salesData) {
-                    setReports(salesData.map(mapSaleFromSupabase));
+                    // FORCE RE-RENDER (Polling): Ensure new reference
+                    setReports([...salesData.map(mapSaleFromSupabase)]);
                     setLastSyncTime(new Date());
                 }
 
