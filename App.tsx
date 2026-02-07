@@ -34,7 +34,7 @@ function App() {
   const [pizzaBasePrices, setPizzaBasePrices] = useLocalStorage<Record<string, number>>('app_pizza_base_prices_v1', PIZZA_BASE_PRICES);
   const businessLogo = "https://i.ibb.co/9HxvMhx/keclick-logo.png"; // Placeholder image but we'll use CSS mostly
 
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useLocalStorage<User | null>('app_current_user_v1', null);
   const [removalReasons, setRemovalReasons] = useState<Record<string, string>>({});
 
   const [settings, setSettings] = useLocalStorage<AppSettings>('app_settings_v3', {
@@ -350,6 +350,35 @@ function App() {
     }
     lastReadyCount.current = readyPlatesDetails.length;
   }, [readyPlatesDetails.length, currentView, currentUser]);
+
+  // --- EFECTO: ALERTA DE NUEVA COMANDA PARA COCINA ---
+  const lastActiveOrdersCount = React.useRef(0);
+  const activeOrdersCount = React.useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return reports.filter(r => r.date === today && r.notes !== 'ANULADO' && !r.closed).length;
+  }, [reports]);
+
+  useEffect(() => {
+    if (activeOrdersCount > lastActiveOrdersCount.current && currentView === 'kitchen') {
+      try {
+        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.type = 'square'; // Sonido más penetrante para cocina
+        oscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.1);
+        gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 0.3);
+      } catch (e) {
+        console.log('Kitchen sound blocked');
+      }
+    }
+    lastActiveOrdersCount.current = activeOrdersCount;
+  }, [activeOrdersCount, currentView]);
 
   // Detalles de platos en PREPARACIÓN para este mesero O ADMIN
   const preparingPlatesDetails = React.useMemo(() => {

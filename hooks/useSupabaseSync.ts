@@ -158,27 +158,38 @@ export const useSupabaseSync = (
                     filter: `store_id=eq.${currentStoreId}`
                 }, async (payload) => {
                     setSyncStatus('online');
-                    lastFetchRef.current = Date.now(); // Actualizar pulso
+                    lastFetchRef.current = Date.now();
 
                     if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-                        // TÉCNICA JUAN-CHAT: Re-fetch del registro completo
-                        const { data, error } = await supabase
-                            .from('sales')
-                            .select('*')
-                            .eq('id', payload.new.id)
-                            .single();
+                        // OPTIMIZADO: Usar payload directo si viene completo (order_data presente)
+                        const payloadData = payload.new as any;
+                        const isComplete = payloadData && payloadData.order_data;
 
-                        if (!error && data) {
-                            const fullSale = mapSaleFromSupabase(data);
-                            setReports(prev => {
-                                if (payload.eventType === 'INSERT') {
-                                    if (prev.some(r => r.id === fullSale.id)) return prev;
-                                    return [fullSale, ...prev];
-                                } else {
-                                    return prev.map(r => r.id === fullSale.id ? fullSale : r);
-                                }
-                            });
+                        let fullSale: SaleRecord;
+
+                        if (isComplete) {
+                            // Datos completos - usar directamente (más rápido)
+                            fullSale = mapSaleFromSupabase(payloadData);
+                        } else {
+                            // Datos parciales - re-fetch necesario
+                            const { data, error } = await supabase
+                                .from('sales')
+                                .select('*')
+                                .eq('id', payloadData.id)
+                                .single();
+
+                            if (error || !data) return;
+                            fullSale = mapSaleFromSupabase(data);
                         }
+
+                        setReports(prev => {
+                            if (payload.eventType === 'INSERT') {
+                                if (prev.some(r => r.id === fullSale.id)) return prev;
+                                return [fullSale, ...prev];
+                            } else {
+                                return prev.map(r => r.id === fullSale.id ? fullSale : r);
+                            }
+                        });
                     } else if (payload.eventType === 'DELETE') {
                         setReports(prev => prev.filter(r => r.id !== payload.old.id));
                     }
@@ -218,13 +229,13 @@ export const useSupabaseSync = (
 
         subscribe();
 
-        // POLL FALLBACK ULTRAAGRESIVO (Cada 10 segundos SIEMPRE)
+        // POLL FALLBACK ULTRAAGRESIVO (Cada 3 segundos SIEMPRE)
         pollingInterval = setInterval(() => {
-            // Si han pasado más de 12 segundos sin novedades, forzar descarga
-            if (Date.now() - lastFetchRef.current > 12000) {
+            // Si han pasado más de 4 segundos sin novedades, forzar descarga
+            if (Date.now() - lastFetchRef.current > 4000) {
                 fetchData();
             }
-        }, 10000);
+        }, 3000);
 
         const handleAutoRefresh = () => {
             console.log('📱 Despertando App - Refrescando todo...');
