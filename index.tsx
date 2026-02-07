@@ -12,7 +12,7 @@ if (rootElement) {
   );
 }
 
-// Registro simple del Service Worker para PWA
+// Registro simple del Service Worker para PWA (Ruta relativa estilo Trinchera)
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(err => console.error("SW Error:", err));
+  navigator.serviceWorker.register('sw.js').catch(err => console.error("SW Error:", err));
 }
