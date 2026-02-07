@@ -149,10 +149,19 @@ export const useSupabaseSync = (
         const subscribe = () => {
             if (channel) supabase.removeChannel(channel);
 
-            // PATRÓN CASINO-PREMIUM: Sin filtro en el canal, filtrar client-side
-            // Los filtros en Supabase Realtime fallan silenciosamente en móviles
+            // SOLUCIÓN: UUID único por dispositivo para evitar conflictos de sesión
+            // Cada dispositivo tiene su propio canal, todos reciben los mismos eventos
+            let deviceId = localStorage.getItem('keclick_device_uuid');
+            if (!deviceId) {
+                deviceId = 'dev_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+                localStorage.setItem('keclick_device_uuid', deviceId);
+            }
+
+            console.log('🔌 Conectando dispositivo:', deviceId);
+
+            // Canal único por dispositivo - evita que Supabase confunda conexiones
             channel = supabase
-                .channel('public:sales')
+                .channel(`realtime_${deviceId}`)
                 .on('postgres_changes', {
                     event: '*',
                     schema: 'public',
