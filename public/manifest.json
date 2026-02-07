@@ -4,31 +4,14 @@
   "description": "Sistema profesional de facturación y pedidos Keclick.",
   "icons": [
     {
-      "src": "https://i.ibb.co/9HxvMhx/keclick-logo.png",
+      "src": "https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
       "type": "image/png",
-      "sizes": "192x192",
-      "purpose": "any"
+      "sizes": "192x192"
     },
     {
-      "src": "https://i.ibb.co/9HxvMhx/keclick-logo.png",
+      "src": "https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
       "type": "image/png",
-      "sizes": "192x192",
-      "purpose": "maskable"
-    },
-    {
-      "src": "https://i.ibb.co/9HxvMhx/keclick-logo.png",
-      "type": "image/png",
-      "sizes": "512x512",
-      "purpose": "any"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "https://i.ibb.co/9HxvMhx/keclick-logo.png",
-      "sizes": "1080x1920",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Keclick"
+      "sizes": "512x512"
     }
   ],
   "start_url": "/",
