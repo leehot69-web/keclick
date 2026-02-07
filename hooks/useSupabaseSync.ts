@@ -149,29 +149,30 @@ export const useSupabaseSync = (
         const subscribe = () => {
             if (channel) supabase.removeChannel(channel);
 
+            // PATRÓN CASINO-PREMIUM: Sin filtro en el canal, filtrar client-side
+            // Los filtros en Supabase Realtime fallan silenciosamente en móviles
             channel = supabase
-                .channel(`store-${currentStoreId}`)
+                .channel('public:sales')
                 .on('postgres_changes', {
                     event: '*',
                     schema: 'public',
-                    table: 'sales',
-                    filter: `store_id=eq.${currentStoreId}`
+                    table: 'sales'
                 }, async (payload) => {
+                    // Filtrar client-side por store_id
+                    const payloadData = payload.new as any || payload.old as any;
+                    if (payloadData?.store_id !== currentStoreId) return;
+
                     setSyncStatus('online');
                     lastFetchRef.current = Date.now();
 
                     if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-                        // OPTIMIZADO: Usar payload directo si viene completo (order_data presente)
-                        const payloadData = payload.new as any;
                         const isComplete = payloadData && payloadData.order_data;
 
                         let fullSale: SaleRecord;
 
                         if (isComplete) {
-                            // Datos completos - usar directamente (más rápido)
                             fullSale = mapSaleFromSupabase(payloadData);
                         } else {
-                            // Datos parciales - re-fetch necesario
                             const { data, error } = await supabase
                                 .from('sales')
                                 .select('*')
@@ -191,15 +192,17 @@ export const useSupabaseSync = (
                             }
                         });
                     } else if (payload.eventType === 'DELETE') {
-                        setReports(prev => prev.filter(r => r.id !== payload.old.id));
+                        setReports(prev => prev.filter(r => r.id !== payloadData.id));
                     }
                 })
                 .on('postgres_changes', {
                     event: '*',
                     schema: 'public',
-                    table: 'day_closures',
-                    filter: `store_id=eq.${currentStoreId}`
+                    table: 'day_closures'
                 }, (payload) => {
+                    const payloadData = payload.new as any;
+                    if (payloadData?.store_id !== currentStoreId) return;
+
                     setSyncStatus('online');
                     lastFetchRef.current = Date.now();
                     if (payload.eventType === 'INSERT') {
@@ -218,7 +221,7 @@ export const useSupabaseSync = (
                 .subscribe((status) => {
                     if (status === 'SUBSCRIBED') {
                         setSyncStatus('online');
-                        console.log('✅ Realtime Activo:', currentStoreId);
+                        console.log('✅ Realtime Activo (Patrón Casino):', currentStoreId);
                     }
                     if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
                         setSyncStatus('polling');
