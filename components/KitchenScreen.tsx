@@ -11,6 +11,7 @@ interface KitchenScreenProps {
     onLogout: () => void;
     onManualSync?: () => void;
     syncStatus?: 'connecting' | 'online' | 'offline' | 'polling';
+    lastSyncTime?: Date;
 }
 
 const KitchenScreen: React.FC<KitchenScreenProps> = ({
@@ -21,7 +22,8 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({
     onCloseOrder,
     onLogout,
     onManualSync,
-    syncStatus = 'online'
+    syncStatus = 'online',
+    lastSyncTime
 }) => {
     const today = new Date().toISOString().split('T')[0];
     const [now, setNow] = useState(new Date());
@@ -106,7 +108,7 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({
                     </div>
                     <div>
                         <h1 className="text-xl font-black uppercase tracking-tight">{stationName}</h1>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase">{currentUser?.name} • {today} • ID:{settings.storeId?.slice(-4)} • R:{reports.length}</p>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase">{currentUser?.name} • ID:{settings.storeId?.slice(-4)} • R:{reports.length} • {lastSyncTime ? lastSyncTime.toLocaleTimeString() : ''}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">

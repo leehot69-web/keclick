@@ -232,7 +232,7 @@ function App() {
   };
 
   // --- ESCUCHA DE SUPABASE ---
-  const { syncSale, syncSettings, syncClosure, refreshData, syncStatus } = useSupabaseSync(
+  const { syncSale, syncSettings, syncClosure, refreshData, syncStatus, lastSyncTime } = useSupabaseSync(
     settings,
     setSettings,
     reports,
@@ -1320,6 +1320,7 @@ function App() {
                 onLogout={handleLogout}
                 onManualSync={handleManualSync}
                 syncStatus={syncStatus}
+                lastSyncTime={lastSyncTime}
               />;
               case 'success': return <SuccessScreen cart={lastSoldRecord?.cart || []} customerDetails={lastSoldRecord?.details || customerDetails} onStartNewOrder={handleStartNewOrder} onReprint={() => handlePrintOrder(undefined, true)} isPrinterConnected={isPrinterConnected} activeRate={activeRate} />;
               default: return null;

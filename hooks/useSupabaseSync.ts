@@ -14,6 +14,7 @@ export const useSupabaseSync = (
     currentStoreId: string | null
 ) => {
     const [syncStatus, setSyncStatus] = useState<'connecting' | 'online' | 'offline' | 'polling'>('connecting');
+    const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
     const lastFetchRef = useRef<number>(Date.now());
     const mapSaleFromSupabase = (s: any): SaleRecord => ({
         ...s,
@@ -109,6 +110,7 @@ export const useSupabaseSync = (
 
                 if (salesData) {
                     setReports(salesData.map(mapSaleFromSupabase));
+                    setLastSyncTime(new Date());
                 }
 
                 // Cierres
@@ -336,5 +338,5 @@ export const useSupabaseSync = (
         if (error) console.error('Error syncing closure:', error);
     };
 
-    return { syncSale, syncSettings, syncClosure, refreshData: fetchData, syncStatus };
+    return { syncSale, syncSettings, syncClosure, refreshData: fetchData, syncStatus, lastSyncTime };
 };
