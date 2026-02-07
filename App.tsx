@@ -23,10 +23,12 @@ import AdminDashboard from './components/AdminDashboard';
 import KitchenScreen from './components/KitchenScreen';
 import RegistrationScreen from './components/RegistrationScreen';
 import { supabase } from './utils/supabase';
+import { useSessionStorage } from './hooks/useSessionStorage';
 
 function App() {
   // --- ESTADO PERSISTENTE ---
   const [menu, setMenu] = useLocalStorage<MenuCategory[]>('app_menu_v1', KECLICK_MENU_DATA);
+
   const [modifierGroups, setModifierGroups] = useLocalStorage<ModifierGroup[]>('app_modifiers_v1', KECLICK_MODIFIERS);
   const [theme, setTheme] = useLocalStorage<ThemeName>('app_theme_v1', 'red');
   const [businessName, setBusinessName] = useLocalStorage<string>('app_business_name_v1', 'Keclick');
@@ -34,7 +36,9 @@ function App() {
   const [pizzaBasePrices, setPizzaBasePrices] = useLocalStorage<Record<string, number>>('app_pizza_base_prices_v1', PIZZA_BASE_PRICES);
   const businessLogo = "https://i.ibb.co/9HxvMhx/keclick-logo.png"; // Placeholder image but we'll use CSS mostly
 
-  const [currentUser, setCurrentUser] = useLocalStorage<User | null>('app_current_user_v1', null);
+  // CAMBIO CRÍTICO: Usar SessionStorage para permitir múltiples sesiones en diferentes pestañas
+  // (Ej: Pestaña 1 = Mesero Juan, Pestaña 2 = Cocina)
+  const [currentUser, setCurrentUser] = useSessionStorage<User | null>('app_current_user_v1', null);
   const [removalReasons, setRemovalReasons] = useState<Record<string, string>>({});
 
   const [settings, setSettings] = useLocalStorage<AppSettings>('app_settings_v3', {
