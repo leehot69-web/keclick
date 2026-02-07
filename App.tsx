@@ -26,6 +26,17 @@ import MasterDashboard from './components/MasterDashboard';
 import { supabase } from './utils/supabase';
 import { useSessionStorage } from './hooks/useSessionStorage';
 
+// SOLUCIÓN PWA ROBUSTA: Capturar el prompt globalmente para no perderlo entre renders o recargas parciales
+let deferredPromptGlobal: any = null;
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPromptGlobal = e;
+    // Disparar un evento personalizado para que React se entere si el componente ya montó
+    window.dispatchEvent(new CustomEvent('pwa-prompt-available'));
+  });
+}
+
 function App() {
   // --- ESTADO PERSISTENTE ---
   const [menu, setMenu] = useLocalStorage<MenuCategory[]>('app_menu_v1', KECLICK_MENU_DATA);
@@ -489,7 +500,9 @@ function App() {
 
   useEffect(() => {
     const userAgent = window.navigator.userAgent.toLowerCase();
-    if (/iphone|ipad|ipod/.test(userAgent)) {
+    const isIOS = /iphone|ipad|ipod/.test(userAgent);
+
+    if (isIOS) {
       setPlatform('ios');
       if (!window.matchMedia('(display-mode: standalone)').matches) {
         setShowInstallBtn(true);
@@ -497,12 +510,36 @@ function App() {
     } else if (/android/.test(userAgent)) {
       setPlatform('android');
     }
-    window.addEventListener('beforeinstallprompt', (e) => {
+
+    // Verificar si ya tenemos el prompt capturado globalmente
+    const checkPrompt = () => {
+      if (deferredPromptGlobal) {
+        setDeferredPrompt(deferredPromptGlobal);
+        setShowInstallBtn(true);
+        if (!isIOS) setPlatform('android');
+      }
+    };
+
+    checkPrompt();
+
+    // Escuchar el evento personalizado si el prompt llega después del montaje
+    window.addEventListener('pwa-prompt-available', checkPrompt);
+
+    // Backup: escuchar también localmente por si acaso
+    const handleLocalPrompt = (e: any) => {
       e.preventDefault();
+      deferredPromptGlobal = e;
       setDeferredPrompt(e);
       setShowInstallBtn(true);
       setPlatform('android');
-    });
+    };
+
+    window.addEventListener('beforeinstallprompt', handleLocalPrompt);
+
+    return () => {
+      window.removeEventListener('pwa-prompt-available', checkPrompt);
+      window.removeEventListener('beforeinstallprompt', handleLocalPrompt);
+    };
   }, []);
 
   const handleInstallClick = () => {
@@ -518,13 +555,22 @@ function App() {
     }
 
     try {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
+      const promptToUse = deferredPrompt || deferredPromptGlobal;
+      if (!promptToUse) {
+        setShowInstallModal(false);
+        alert("Para instalar, por favor abre el menú de opciones de tu navegador y busca 'Instalar aplicación'.");
+        return;
+      }
+
+      promptToUse.prompt();
+      const { outcome } = await promptToUse.userChoice;
       console.log(`User response to the install prompt: ${outcome}`);
 
-      // Cerramos el modal independientemente del resultado
-      setDeferredPrompt(null);
-      setShowInstallBtn(false);
+      if (outcome === 'accepted') {
+        deferredPromptGlobal = null;
+        setDeferredPrompt(null);
+        setShowInstallBtn(false);
+      }
       setShowInstallModal(false);
     } catch (err) {
       console.error("Error al intentar instalar:", err);
