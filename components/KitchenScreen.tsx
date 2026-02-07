@@ -28,6 +28,34 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({
     const today = new Date().toISOString().split('T')[0];
     const [now, setNow] = useState(new Date());
     const [pinnedOrders, setPinnedOrders] = useState<string[]>([]);
+    const [isWakeLockActive, setIsWakeLockActive] = useState(false);
+
+    // Activar Wake Lock (Pantalla y Audio Fantasma para móviles)
+    const enableWakeLock = async () => {
+        try {
+            // 1. Screen Wake Lock API
+            if ('wakeLock' in navigator) {
+                // @ts-ignore
+                const wakeLock = await navigator.wakeLock.request('screen');
+                console.log('💡 Wake Lock activo');
+            }
+
+            // 2. Audio Fantasma (Loop silencioso para mantener CPU despierta en móviles)
+            const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            gainNode.gain.value = 0.0001; // Casi silencio
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.start();
+
+            setIsWakeLockActive(true);
+            alert('📱 MODO "SIEMPRE ENCENDIDO" ACTIVADO\n\nEl dispositivo no se dormirá y sincronizará en tiempo real.\n(Puede consumir más batería)');
+        } catch (err) {
+            console.error('Error activating wake lock:', err);
+            alert('No se pudo activar el modo "Siempre Encendido". Revisa los permisos.');
+        }
+    };
 
     // Actualizar el tiempo cada 10 segundos (más responsivo)
     useEffect(() => {
@@ -117,6 +145,18 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({
                         <div className={`w-2 h-2 rounded-full ${syncStatus === 'online' ? 'bg-green-400 animate-pulse' : syncStatus === 'polling' ? 'bg-amber-400 animate-pulse' : 'bg-red-400'}`}></div>
                         {syncStatus === 'online' ? 'VIVO' : syncStatus === 'polling' ? 'AUTO' : 'OFF'}
                     </div>
+
+                    {/* Botón Wake Lock */}
+                    <button
+                        onClick={enableWakeLock}
+                        className={`p-3 rounded-xl transition-colors ${isWakeLockActive ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/30' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
+                        title={isWakeLockActive ? "Modo Siempre Encendido ACTIVO" : "Activar Modo Siempre Encendido"}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                    </button>
+
                     {onManualSync && (
                         <button onClick={onManualSync} className="p-3 bg-blue-500/20 text-blue-400 rounded-xl hover:bg-blue-500/30 transition-colors" title="Sincronizar">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
