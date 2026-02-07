@@ -63,6 +63,18 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({
         return () => clearInterval(timer);
     }, []);
 
+    // Escuchar latido del iframe KeepAlive
+    useEffect(() => {
+        const handleMessage = (event: MessageEvent) => {
+            if (event.data === 'heartbeat') {
+                console.log('💓 Heartbeat recibido - Refrescando...');
+                if (onManualSync) onManualSync();
+            }
+        };
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    }, [onManualSync]);
+
     // Estado para mostrar animación cuando llegan nuevos pedidos
     const [lastOrderCount, setLastOrderCount] = useState(0);
     const [showNewOrderPulse, setShowNewOrderPulse] = useState(false);
@@ -333,6 +345,14 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({
                 <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div> Sistema de Cocina Keclick KDS v2.0</span>
                 <span className="tabular-nums opacity-50">{now.toLocaleTimeString()}</span>
             </footer>
+            {/* Hack: Iframe Invisible para mantener la conexión viva */}
+            {isWakeLockActive && (
+                <iframe
+                    src="/keepalive.html"
+                    title="keepalive"
+                    style={{ width: 1, height: 1, border: 'none', position: 'absolute', opacity: 0, pointerEvents: 'none' }}
+                />
+            )}
         </div >
     );
 };

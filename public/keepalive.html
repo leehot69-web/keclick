@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="refresh" content="20">
+    <title>KeepAlive</title>
+</head>
+
+<body style="background-color: transparent;">
+    <script>
+        console.log('💓 Heartbeat tick ' + new Date().toLocaleTimeString());
+        // Enviar mensaje al padre para forzar actividad
+        if (window.parent) {
+            window.parent.postMessage('heartbeat', '*');
+        }
+    </script>
+</body>
+
+</html>
