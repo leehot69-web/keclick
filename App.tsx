@@ -1328,17 +1328,15 @@ function App() {
                   })()}
                 </div>
 
-                {/* Notificaciones */}
-                {currentUser && currentUser.role === 'mesero' && hasPreparingPlates && currentView !== 'kitchen' && (
-                  <div className="absolute top-4 left-4 right-4 bg-amber-500/90 backdrop-blur-md text-white py-2 px-4 shadow-xl rounded-2xl z-[100] border border-amber-400 flex items-center justify-between gap-3 overflow-hidden">
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="flex h-6 w-6 items-center justify-center bg-white text-amber-600 rounded-full animate-pulse">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                      </span>
-                      <span className="text-[10px] font-black uppercase tracking-tighter">COCINANDO</span>
-                    </div>
-                    <div className="flex-1 overflow-hidden">
-                      <div className="animate-marquee whitespace-nowrap text-xs font-bold uppercase italic tracking-widest">
+                {/* NOTIFICACIÓN (PREPARANDO) DE COCINA HACIA MESERO/ADMIN */}
+                {currentUser && (currentUser.role === 'mesero' || currentUser.role === 'admin') && hasPreparingPlates && currentView !== 'kitchen' && (
+                  <div
+                    className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 px-6 py-3 rounded-full shadow-lg font-black text-xs uppercase tracking-widest z-50 flex items-center gap-3 animate-pulse cursor-pointer border-2 border-yellow-500"
+                    onClick={() => setShowMasterDashboard(true)} // Admin click to dashboard
+                  >
+                    <span className="w-2 h-2 bg-yellow-600 rounded-full animate-ping"></span>
+                    <div className="flex gap-4 overflow-hidden whitespace-nowrap max-w-[70vw]">
+                      <div className="animate-marquee inline-block">
                         {preparingPlatesDetails.map((item, idx) => (<span key={idx} className="mr-8">🔥 {item.itemName} ({item.table})</span>))}
                       </div>
                     </div>
