@@ -10,6 +10,7 @@ interface MenuManagementModalProps {
   menu: MenuCategory[];
   modifierGroups: ModifierGroup[];
   onSave: (menu: MenuCategory[], modifierGroups: ModifierGroup[]) => void;
+  syncMenu?: (menu: MenuCategory[], modifierGroups: ModifierGroup[]) => Promise<{ success: boolean; error?: any }>;
   onClose: () => void;
   pizzaIngredients: PizzaIngredient[];
   pizzaBasePrices: Record<string, number>;
@@ -18,7 +19,8 @@ interface MenuManagementModalProps {
 }
 
 const MenuManagementModal: React.FC<MenuManagementModalProps> = (props) => {
-  const { menu, modifierGroups, onSave, onClose, pizzaIngredients, pizzaBasePrices, onUpdatePizzaConfig, kitchenStations = [] } = props;
+  const { menu, modifierGroups, onSave, syncMenu, onClose, pizzaIngredients, pizzaBasePrices, onUpdatePizzaConfig, kitchenStations = [] } = props;
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Estado local para permitir edición antes de guardar definitivamente
   const [localMenu, setLocalMenu] = useState<MenuCategory[]>(JSON.parse(JSON.stringify(menu)));
@@ -240,6 +242,48 @@ const MenuManagementModal: React.FC<MenuManagementModalProps> = (props) => {
     onClose();
   };
 
+  const handleCloudSync = async () => {
+    if (!syncMenu) return;
+    if (!confirm('¿Quieres subir este menú a la nube? Esto reemplazará el menú actual en la base de datos para esta tienda.')) return;
+
+    setIsSyncing(true);
+    const result = await syncMenu(localMenu, localModifierGroups);
+    setIsSyncing(false);
+
+    if (result.success) {
+      alert('✅ Menú publicado exitosamente en la nube.');
+    } else {
+      alert('❌ Error al publicar: ' + (result.error?.message || 'Error desconocido'));
+    }
+  };
+
+  const handleLoadTestData = () => {
+    const testBurgerCategory: MenuCategory = {
+      title: "🍔 PRUEBAS AI",
+      items: [
+        {
+          name: "Hamburguesa Monster AI",
+          price: 12.5,
+          available: true,
+          description: "Doble carne, triple queso, tocino y salsa secreta de Antigravity.",
+          kitchenStations: ["general"],
+          modifierGroupTitles: []
+        },
+        {
+          name: "Papas Fritas XL",
+          price: 4.0,
+          available: true,
+          description: "Crocantes y saladas.",
+          kitchenStations: ["general"],
+          modifierGroupTitles: []
+        }
+      ]
+    };
+
+    setLocalMenu(prev => [testBurgerCategory, ...prev]);
+    alert('Se ha añadido la categoría "PRUEBAS AI" al inicio de tu menú local. Dale a "Guardar Todo" o "Publicar en la Nube".');
+  };
+
   return (
     <>
       <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -348,9 +392,28 @@ const MenuManagementModal: React.FC<MenuManagementModalProps> = (props) => {
             </div>
           </div>
 
-          <div className="mt-6 pt-4 border-t border-gray-100 flex-shrink-0 flex gap-4">
-            <button onClick={onClose} className="flex-1 py-4 font-black text-gray-400 uppercase tracking-widest text-xs">Cancelar</button>
-            <button onClick={handleFinalSave} className="flex-[2] py-4 bg-red-600 text-white font-black uppercase tracking-widest text-sm rounded-2xl shadow-xl shadow-red-100 active:scale-95 transition-all">Guardar Todo el Menú</button>
+          <div className="mt-6 pt-4 border-t border-gray-100 flex-shrink-0 flex flex-col gap-3">
+            <div className="flex gap-4">
+              <button
+                onClick={handleLoadTestData}
+                className="flex-1 py-3 bg-amber-500/10 text-amber-600 border border-amber-500/20 font-black uppercase tracking-widest text-[10px] rounded-xl hover:bg-amber-500/20 transition-all"
+              >
+                🎁 Cargar Hamburguesa Prueba
+              </button>
+              {syncMenu && (
+                <button
+                  onClick={handleCloudSync}
+                  disabled={isSyncing}
+                  className="flex-1 py-3 bg-blue-600 text-white font-black uppercase tracking-widest text-[10px] rounded-xl shadow-lg shadow-blue-200 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {isSyncing ? 'Subiendo...' : '☁️ Publicar en la Nube'}
+                </button>
+              )}
+            </div>
+            <div className="flex gap-4">
+              <button onClick={onClose} className="flex-1 py-4 font-black text-gray-400 uppercase tracking-widest text-xs">Cancelar</button>
+              <button onClick={handleFinalSave} className="flex-[2] py-4 bg-red-600 text-white font-black uppercase tracking-widest text-sm rounded-2xl shadow-xl shadow-red-100 active:scale-95 transition-all">Guardar Localmente</button>
+            </div>
           </div>
         </div>
       </div>

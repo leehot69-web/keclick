@@ -43,9 +43,12 @@ const RegistrationScreen: React.FC<RegistrationScreenProps> = ({ onRegister, onJ
 
     return (
         <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-white font-sans overflow-hidden">
+
             <div className="w-full max-w-md space-y-8 animate-in fade-in zoom-in duration-500">
                 <div className="text-center">
-                    <div className="text-6xl font-black uppercase tracking-tighter italic mb-4">
+                    <div
+                        className="text-6xl font-black uppercase tracking-tighter italic mb-4"
+                    >
                         <span className="text-[#FF0000]">Ke</span>
                         <span className="text-[#FFD700]">click</span>
                     </div>

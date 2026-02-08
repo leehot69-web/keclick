@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { MenuItem, PizzaSize, PizzaIngredient, PizzaHalf, PizzaIngredientSelection, PizzaConfiguration, CartItem } from '../types';
+import { MenuItem, PizzaSize, PizzaIngredient, PizzaHalf, PizzaIngredientSelection, PizzaConfiguration, CartItem, SelectedModifier, ModifierGroup } from '../types';
 import { PIZZA_BASE_PRICES, PIZZA_INGREDIENTS } from '../constants';
 
 interface PizzaBuilderModalProps {

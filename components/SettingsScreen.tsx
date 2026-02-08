@@ -28,6 +28,7 @@ interface SettingsScreenProps {
   pizzaBasePrices: Record<string, number>;
   onUpdatePizzaConfig: (ingredients: PizzaIngredient[], basePrices: Record<string, number>) => void;
   onResetApp?: () => void;
+  syncMenu?: (menu: MenuCategory[], modifierGroups: ModifierGroup[]) => Promise<{ success: boolean; error?: any }>;
 }
 
 const StoreProfileEditor: React.FC<{
@@ -39,7 +40,8 @@ const StoreProfileEditor: React.FC<{
   pizzaBasePrices: Record<string, number>;
   onUpdatePizzaConfig: (ingredients: PizzaIngredient[], basePrices: Record<string, number>) => void;
   kitchenStations: KitchenStation[];
-}> = ({ profile, onUpdate, onPermanentSave, onOpenPriceIncreaseModal, pizzaIngredients, pizzaBasePrices, onUpdatePizzaConfig, kitchenStations = [] }) => {
+  syncMenu?: (menu: MenuCategory[], modifierGroups: ModifierGroup[]) => Promise<{ success: boolean; error?: any }>;
+}> = ({ profile, onUpdate, onPermanentSave, onOpenPriceIncreaseModal, pizzaIngredients, pizzaBasePrices, onUpdatePizzaConfig, kitchenStations = [], syncMenu }) => {
   const [isMenuModalOpen, setMenuModalOpen] = useState(false);
   const themes: { name: ThemeName, label: string }[] = [
     { name: 'keclick', label: 'Keclick' },
@@ -122,6 +124,7 @@ const StoreProfileEditor: React.FC<{
           pizzaIngredients={pizzaIngredients}
           pizzaBasePrices={pizzaBasePrices}
           onUpdatePizzaConfig={onUpdatePizzaConfig}
+          syncMenu={syncMenu}
         />
       )}
     </div>
@@ -133,7 +136,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = (props) => {
     settings, onSaveSettings, onGoToTables, waiter, onLogout,
     storeProfiles, onUpdateStoreProfiles, onClearAllSalesData,
     isPrinterConnected, printerName, onConnectPrinter, onDisconnectPrinter, onPrintTest,
-    pizzaIngredients, pizzaBasePrices, onUpdatePizzaConfig, onResetApp
+    pizzaIngredients, pizzaBasePrices, onUpdatePizzaConfig, onResetApp, syncMenu
   } = props;
 
   const [localSettings, setLocalSettings] = useState(settings);
@@ -250,6 +253,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = (props) => {
             pizzaBasePrices={pizzaBasePrices}
             onUpdatePizzaConfig={onUpdatePizzaConfig}
             kitchenStations={localSettings.kitchenStations || []}
+            syncMenu={syncMenu}
           />
         ))}
         <div className="bg-[#111] p-6 rounded-3xl border border-white/5 space-y-4">

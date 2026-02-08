@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '../utils/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
-import { AppSettings, SaleRecord, DayClosure, StoreProfile } from '../types';
+import { AppSettings, SaleRecord, DayClosure, StoreProfile, MenuCategory, ModifierGroup } from '../types';
 
 export const useSupabaseSync = (
     settings: AppSettings,
@@ -11,7 +11,9 @@ export const useSupabaseSync = (
     dayClosures: DayClosure[],
     setDayClosures: (d: DayClosure[] | ((prev: DayClosure[]) => DayClosure[])) => void,
     menu: any[],
+    setMenu: (m: any[] | ((prev: any[]) => any[])) => void,
     modifierGroups: any[],
+    setModifierGroups: (m: any[] | ((prev: any[]) => any[])) => void,
     currentStoreId: string | null
 ) => {
     const [syncStatus, setSyncStatus] = useState<'connecting' | 'online' | 'offline' | 'polling'>('connecting');
@@ -64,13 +66,14 @@ export const useSupabaseSync = (
             if (salesError) throw salesError;
 
             if (salesData) {
-                setReports(prev => {
-                    const pendingMap = new Map(prev.filter(p => p._pendingSync).map(p => [p.id, p]));
-                    const remoteMapped = salesData.map(mapSaleFromSupabase);
+                const sales = salesData as any[];
+                setReports((prev: SaleRecord[]) => {
+                    const pendingMap = new Map<string, SaleRecord>(prev.filter(p => p._pendingSync).map(p => [p.id, p]));
+                    const remoteMapped: SaleRecord[] = sales.map(mapSaleFromSupabase);
                     const merged = remoteMapped.map(r => pendingMap.get(r.id) || r);
                     const remoteIds = new Set(remoteMapped.map(r => r.id));
                     const newLocals = prev.filter(p => p._pendingSync && !remoteIds.has(p.id));
-                    const finalReports = [...newLocals, ...merged];
+                    const finalReports: SaleRecord[] = [...newLocals, ...merged];
 
                     const currentDataStr = JSON.stringify(prev);
                     const newDataStr = JSON.stringify(finalReports);
@@ -99,7 +102,7 @@ export const useSupabaseSync = (
                 })));
             }
 
-            // Settings
+            // 3. Settings (RESTAURADO)
             const { data: settingsData } = await supabase
                 .from('settings')
                 .select('*')
@@ -107,19 +110,96 @@ export const useSupabaseSync = (
                 .single();
 
             if (settingsData) {
-                setSettings({
-                    ...settingsData,
-                    storeId: settingsData.store_id,
-                    kitchenStations: settingsData.kitchen_stations,
-                    users: settingsData.users
+                setSettings(prev => {
+                    const updated = {
+                        ...prev,
+                        ...settingsData,
+                        storeId: settingsData.store_id,
+                        kitchenStations: settingsData.kitchen_stations,
+                        users: settingsData.users
+                    };
+                    if (JSON.stringify(prev) !== JSON.stringify(updated)) {
+                        return updated;
+                    }
+                    return prev;
                 });
             }
+
+            // 4. Menu & Modifiers (NUEVAS TABLAS)
+            const { data: remoteCategories } = await supabase
+                .from('menu_categories')
+                .select('*')
+                .eq('store_id', currentStoreId)
+                .order('order_index', { ascending: true });
+
+            const { data: remoteItems } = await supabase
+                .from('menu_items')
+                .select('*')
+                .eq('store_id', currentStoreId);
+
+            const { data: remoteModifiers } = await supabase
+                .from('modifier_groups')
+                .select('*')
+                .eq('store_id', currentStoreId);
+
+            // Sincronizar Modificadores
+            if (remoteModifiers && remoteModifiers.length > 0) {
+                const mappedModifiers = remoteModifiers.map(m => ({
+                    title: m.title,
+                    selectionType: m.selection_type,
+                    minSelection: m.min_selection,
+                    maxSelection: m.max_selection,
+                    options: m.options,
+                    freeSelectionCount: m.free_selection_count,
+                    extraPrice: m.extra_price
+                }));
+                const currentModStr = JSON.stringify(modifierGroups);
+                const newModStr = JSON.stringify(mappedModifiers);
+                if (currentModStr !== newModStr) {
+                    console.log('✨ [SYNC] Grupos de modificadores actualizados.');
+                    setModifierGroups(mappedModifiers);
+                }
+            }
+
+            // Sincronizar Menú (Reconstruir estructura de categorías)
+            if (remoteCategories && remoteCategories.length > 0 && remoteItems) {
+                const fullMenu = remoteCategories.map(cat => {
+                    const catItems = remoteItems
+                        .filter(item => item.category_id === cat.id)
+                        .map(item => ({
+                            name: item.name,
+                            price: parseFloat(item.price),
+                            available: item.available,
+                            description: item.description,
+                            image: item.image,
+                            isPizza: item.is_pizza,
+                            isSpecialPizza: item.is_special_pizza,
+                            defaultIngredients: item.default_ingredients,
+                            isCombo: item.is_combo,
+                            comboIncludes: item.combo_includes,
+                            kitchenStations: item.kitchen_stations,
+                            modifierGroupTitles: item.modifier_group_titles
+                        }));
+                    return {
+                        title: cat.title,
+                        items: catItems
+                    };
+                });
+
+                const currentMenuStr = JSON.stringify(menu);
+                const newMenuStr = JSON.stringify(fullMenu);
+                if (currentMenuStr !== newMenuStr) {
+                    console.log('✨ [SYNC] Menú dinámico actualizado.');
+                    setMenu(fullMenu);
+                }
+            }
+
             setSyncStatus(prev => prev === 'offline' ? 'polling' : prev);
         } catch (err) {
             console.error("❌ [SYNC] Error en fetchData:", err);
             setSyncStatus('offline');
         }
-    }, [currentStoreId, setReports, setDayClosures, setSettings, mapSaleFromSupabase, forceUIUpdate]);
+    }, [currentStoreId, setReports, setDayClosures, setSettings, setMenu, setModifierGroups, menu, modifierGroups, mapSaleFromSupabase, forceUIUpdate]);
 
     const fetchDataRef = useRef(fetchData);
     useEffect(() => { fetchDataRef.current = fetchData; }, [fetchData]);
@@ -371,6 +451,78 @@ export const useSupabaseSync = (
         });
     }, [currentStoreId]);
 
+    const syncMenu = useCallback(async (categories: MenuCategory[], modifiers: ModifierGroup[]) => {
+        if (!currentStoreId) return { success: false, error: 'No store selected' };
+
+        try {
+            console.log('📤 [SYNC] Sincronizando menú completo con la nube...');
+
+            // 1. Limpiar datos viejos de esta tienda para evitar duplicados/huérfanos
+            // (En un sistema real usaríamos upsert con IDs reales, pero para el menú dinámico v1
+            // el wipe & push es más fiable para mantener la estructura limpia)
+            await supabase.from('modifier_groups').delete().eq('store_id', currentStoreId);
+            await supabase.from('menu_items').delete().eq('store_id', currentStoreId);
+            await supabase.from('menu_categories').delete().eq('store_id', currentStoreId);
+
+            // 2. Insertar Modificadores
+            if (modifiers.length > 0) {
+                const modsToInsert = modifiers.map(m => ({
+                    store_id: currentStoreId,
+                    title: m.title,
+                    selection_type: m.selectionType,
+                    min_selection: m.minSelection,
+                    max_selection: m.maxSelection,
+                    options: m.options,
+                    free_selection_count: m.freeSelectionCount,
+                    extra_price: m.extraPrice
+                }));
+                await supabase.from('modifier_groups').insert(modsToInsert);
+            }
+
+            // 3. Insertar Categorias e Items
+            for (let i = 0; i < categories.length; i++) {
+                const cat = categories[i];
+                const { data: catData, error: catErr } = await supabase
+                    .from('menu_categories')
+                    .insert({
+                        store_id: currentStoreId,
+                        title: cat.title,
+                        order_index: i
+                    })
+                    .select()
+                    .single();
+
+                if (catErr) throw catErr;
+
+                if (cat.items.length > 0) {
+                    const itemsToInsert = cat.items.map(item => ({
+                        store_id: currentStoreId,
+                        category_id: catData.id,
+                        name: item.name,
+                        price: item.price,
+                        available: item.available,
+                        description: item.description,
+                        image: item.image,
+                        is_pizza: item.isPizza,
+                        is_special_pizza: item.isSpecialPizza,
+                        default_ingredients: item.defaultIngredients,
+                        is_combo: item.isCombo,
+                        combo_includes: item.comboIncludes,
+                        kitchen_stations: item.kitchenStations,
+                        modifier_group_titles: item.modifierGroupTitles
+                    }));
+                    await supabase.from('menu_items').insert(itemsToInsert);
+                }
+            }
+
+            console.log('✅ [SYNC] Menú sincronizado exitosamente.');
+            return { success: true };
+        } catch (err) {
+            console.error('❌ [SYNC] Error sincronizando menú:', err);
+            return { success: false, error: err };
+        }
+    }, [currentStoreId]);
+
     // Offline queue processing
     useEffect(() => {
         if (syncStatus !== 'online') return;
@@ -399,9 +551,10 @@ export const useSupabaseSync = (
         safeSyncSale,
         syncSettings,
         syncClosure,
+        syncMenu,
         refreshData: fetchData,
         syncStatus,
         lastSyncTime,
         forceRenderCount
-    }), [syncSale, safeSyncSale, syncSettings, syncClosure, fetchData, syncStatus, lastSyncTime, forceRenderCount]);
+    }), [syncSale, safeSyncSale, syncSettings, syncClosure, syncMenu, fetchData, syncStatus, lastSyncTime, forceRenderCount]);
 };

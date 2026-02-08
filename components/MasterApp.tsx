@@ -29,7 +29,9 @@ interface ManagedStore {
     id: string;
     name: string;
     ownerPhone: string;
-    status: 'active' | 'suspended' | 'expired';
+    ownerName?: string;
+    email?: string;
+    status: 'active' | 'suspended' | 'expired' | 'trial';
     activationDate: string;
     expiryDate: string;
     lastPaymentAmount: number;
@@ -40,6 +42,7 @@ interface ManagedStore {
     commissionRate: number;
     fixedFee: number;
     planName?: string;
+    users?: any[]; // For displaying PIN
     // Datos de Menú para edición remota
     menu?: MenuCategory[];
     modifierGroups?: ModifierGroup[];
@@ -47,7 +50,12 @@ interface ManagedStore {
     pizzaBasePrices?: Record<string, number>;
 }
 
-const MasterApp: React.FC = () => {
+interface MasterAppProps {
+    onClose?: () => void;
+    onSelectStore?: (storeId: string) => void;
+}
+
+const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
     const [isAuthorized, setIsAuthorized] = useState(false);
     const [pin, setPin] = useState('');
     const [selectedStore, setSelectedStore] = useState<ManagedStore | null>(null);
@@ -55,6 +63,13 @@ const MasterApp: React.FC = () => {
     const [isStoreDetailOpen, setIsStoreDetailOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isMenuEditorOpen, setIsMenuEditorOpen] = useState(false);
+    const [showCreateForm, setShowCreateForm] = useState(false);
+    const [newStoreName, setNewStoreName] = useState('');
+    const [newStorePhone, setNewStorePhone] = useState('');
+    const [newOwnerName, setNewOwnerName] = useState('');
+    const [newEmail, setNewEmail] = useState('');
+    const [isCreating, setIsCreating] = useState(false);
+
 
     const [plans, setPlans] = useState<Plan[]>(() => {
         const saved = localStorage.getItem('kemaster_plans_v3');
@@ -103,6 +118,8 @@ const MasterApp: React.FC = () => {
                 id: s.id,
                 name: s.name,
                 ownerPhone: s.owner_phone || '',
+                ownerName: s.owner_name || '',
+                email: 'PENDIENTE',
                 status: s.status as any,
                 activationDate: s.created_at?.split('T')[0] || '',
                 expiryDate: s.trial_ends_at?.split('T')[0] || '',
@@ -151,6 +168,53 @@ const MasterApp: React.FC = () => {
         }
     };
 
+    const handleCreateStore = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newStoreName || !newStorePhone) return;
+
+        const newStoreId = `KC-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+        const now = new Date();
+
+        setIsCreating(true);
+        try {
+            // 1. Crear registro en 'stores'
+            const { error: storeError } = await supabase.from('stores').insert({
+                id: newStoreId,
+                name: newStoreName,
+                owner_phone: newStorePhone,
+                owner_name: newOwnerName,
+                status: 'trial',
+                trial_ends_at: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000).toISOString()
+            });
+
+            if (storeError) throw storeError;
+
+            // 2. Crear settings iniciales
+            const { error: settingsError } = await supabase.from('settings').insert({
+                store_id: newStoreId,
+                business_name: newStoreName,
+                target_number: newStorePhone,
+                is_whatsapp_enabled: true,
+                kitchen_stations: [{ id: 'general', name: 'Cocina General', color: '#FF0000' }],
+                users: [{ id: '1', name: 'Admin', pin: '0000', role: 'admin' }]
+            });
+
+            if (settingsError) throw settingsError;
+
+            alert(`🚀 NAVE REGISTRADA CON ÉXITO.\nID: ${newStoreId}\nPIN ADMIN: 0000`);
+            setShowCreateForm(false);
+            setNewStoreName('');
+            setNewStorePhone('');
+            setNewOwnerName('');
+            setNewEmail('');
+            fetchStores();
+        } catch (err: any) {
+            alert("❌ Error al registrar nave: " + err.message);
+        } finally {
+            setIsCreating(false);
+        }
+    };
+
     const deleteStore = async (storeId: string, storeName: string) => {
         if (!window.confirm(`¿Estás SEGURO de eliminar definitivamente la tienda "${storeName}"?\n\nEsta acción borrará todas sus ventas, configuraciones y acceso de forma IRREVERSIBLE.`)) return;
 
@@ -195,12 +259,118 @@ const MasterApp: React.FC = () => {
         }
     };
 
+    const updateAdminPin = async (storeId: string) => {
+        const newPin = window.prompt("Ingresa el nuevo PIN de Administrador (4 números):");
+        if (!newPin || newPin.length !== 4 || isNaN(Number(newPin))) {
+            alert("❌ PIN inválido. Debe ser de 4 dígitos.");
+            return;
+        }
+
+        try {
+            const { data: currentSettings, error: fetchError } = await supabase
+                .from('settings')
+                .select('users')
+                .eq('store_id', storeId)
+                .single();
+
+            if (fetchError) throw fetchError;
+
+            const updatedUsers = (currentSettings.users || []).map((u: any) =>
+                u.role === 'admin' ? { ...u, pin: newPin } : u
+            );
+
+            const { error: updateError } = await supabase
+                .from('settings')
+                .update({ users: updatedUsers })
+                .eq('store_id', storeId);
+
+            if (updateError) throw updateError;
+
+            setStores(prev => prev.map(s => s.id === storeId ? { ...s, users: updatedUsers } : s));
+            alert("✅ PIN Maestro actualizado con éxito.");
+        } catch (err: any) {
+            alert("❌ Error al actualizar PIN: " + err.message);
+        }
+    };
+
     const addNote = (storeId: string, text: string) => {
         if (!text.trim()) return;
         setStores(prev => prev.map(s => s.id === storeId ? {
             ...s,
             notesHistory: [{ date: new Date().toISOString().split('T')[0], text }, ...s.notesHistory]
         } : s));
+    };
+
+    const syncMenu = async (categories: MenuCategory[], modifiers: ModifierGroup[]) => {
+        if (!selectedStore) return { success: false, error: { message: 'No store selected' } };
+
+        try {
+            console.log('📤 [KeMaster] Sincronizando menú remoto...');
+
+            // 1. Limpiar datos viejos
+            await supabase.from('modifier_groups').delete().eq('store_id', selectedStore.id);
+            await supabase.from('menu_items').delete().eq('store_id', selectedStore.id);
+            await supabase.from('menu_categories').delete().eq('store_id', selectedStore.id);
+
+            // 2. Insertar Modificadores
+            if (modifiers.length > 0) {
+                const modsToInsert = modifiers.map(m => ({
+                    store_id: selectedStore.id,
+                    title: m.title,
+                    selection_type: m.selectionType,
+                    min_selection: m.minSelection,
+                    max_selection: m.maxSelection,
+                    options: m.options,
+                    free_selection_count: m.freeSelectionCount,
+                    extra_price: m.extraPrice
+                }));
+                const { error: modErr } = await supabase.from('modifier_groups').insert(modsToInsert);
+                if (modErr) throw modErr;
+            }
+
+            // 3. Insertar Categorias e Items
+            for (let i = 0; i < categories.length; i++) {
+                const cat = categories[i];
+                const { data: catData, error: catErr } = await supabase
+                    .from('menu_categories')
+                    .insert({
+                        store_id: selectedStore.id,
+                        title: cat.title,
+                        order_index: i
+                    })
+                    .select()
+                    .single();
+
+                if (catErr) throw catErr;
+
+                if (cat.items.length > 0) {
+                    const itemsToInsert = cat.items.map(item => ({
+                        store_id: selectedStore.id,
+                        category_id: catData.id,
+                        name: item.name,
+                        price: item.price,
+                        available: item.available,
+                        description: item.description,
+                        image: item.image,
+                        is_pizza: item.isPizza,
+                        is_special_pizza: item.isSpecialPizza,
+                        default_ingredients: item.defaultIngredients,
+                        is_combo: item.isCombo,
+                        combo_includes: item.comboIncludes,
+                        kitchen_stations: item.kitchenStations,
+                        modifier_group_titles: item.modifierGroupTitles
+                    }));
+                    const { error: itemErr } = await supabase.from('menu_items').insert(itemsToInsert);
+                    if (itemErr) throw itemErr;
+                }
+            }
+
+            console.log('✅ [KeMaster] Menú sincronizado exitosamente.');
+            return { success: true };
+        } catch (err: any) {
+            console.error('❌ [KeMaster] Error sincronizando menú:', err);
+            return { success: false, error: err };
+        }
     };
 
     if (!isAuthorized) {
@@ -217,7 +387,7 @@ const MasterApp: React.FC = () => {
     }
 
     return (
-        <div className="min-h-screen bg-[#050505] text-white font-sans flex flex-col antialiased">
+        <div className="h-screen bg-[#050505] text-white font-sans flex flex-col antialiased overflow-hidden">
             {/* Header de Comando */}
             <header className="p-5 bg-black/80 backdrop-blur-md border-b border-white/5 flex justify-between items-center sticky top-0 z-50">
                 <div className="flex items-center gap-4">
@@ -228,6 +398,12 @@ const MasterApp: React.FC = () => {
                     </div>
                 </div>
                 <div className="flex gap-2">
+                    <button
+                        onClick={() => setShowCreateForm(true)}
+                        className="h-10 px-6 bg-[#FF0000] text-white rounded-xl flex items-center justify-center font-black uppercase text-[10px] tracking-widest shadow-lg shadow-red-600/20 active:scale-95 transition-all"
+                    >
+                        + Nueva Nave
+                    </button>
                     <button onClick={() => setIsSettingsOpen(true)} className="px-4 py-2 bg-white/5 rounded-xl border border-white/10 hover:bg-[#FFD700]/20 transition-all flex items-center gap-2">
                         <svg className="w-4 h-4 text-[#FFD700]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         <span className="text-[10px] font-black uppercase hidden md:inline">Tarifas</span>
@@ -237,10 +413,84 @@ const MasterApp: React.FC = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                         </svg>
                     </button>
+                    {onClose && (
+                        <button onClick={onClose} className="w-10 h-10 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center text-white hover:bg-red-600 transition-all">
+                            ✕
+                        </button>
+                    )}
                 </div>
             </header>
 
-            <main className="flex-1 overflow-y-auto p-6 max-w-7xl mx-auto w-full space-y-6 scrollbar-hide">
+            <main className="flex-1 overflow-y-auto p-6 max-w-7xl mx-auto w-full space-y-6">
+                {/* Panel de Clarificación */}
+                <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl flex items-center gap-4">
+                    <div className="w-10 h-10 bg-amber-500/20 rounded-full flex items-center justify-center text-amber-500 shrink-0">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <p className="text-amber-500 text-xs font-black uppercase tracking-tight">
+                        EL MENÚ SE GESTIONA DENTRO DE CADA TIENDA (Expediente Final → Gestionar Menú de Nave)
+                    </p>
+                </div>
+
+                {/* MODAL: REGISTRO DE NUEVA TIENDA */}
+                {showCreateForm && (
+                    <div className="fixed inset-0 z-[2000] bg-black/98 backdrop-blur-xl flex items-center justify-center p-6">
+                        <form onSubmit={handleCreateStore} className="bg-[#0a0a0a] border border-white/10 p-10 rounded-[3rem] w-full max-w-md space-y-8 shadow-2xl relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-1 bg-red-600"></div>
+                            <h2 className="text-3xl font-black text-white uppercase tracking-tighter italic">Habilitar Nueva Nave</h2>
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-[10px] font-black text-[#FFD700] uppercase mb-3 tracking-widest">Nombre del Negocio / Nave</label>
+                                    <input
+                                        required
+                                        type="text"
+                                        value={newStoreName}
+                                        onChange={e => setNewStoreName(e.target.value)}
+                                        className="w-full bg-white/5 border border-white/10 py-5 px-6 rounded-2xl text-white font-bold text-lg focus:outline-none focus:border-red-600 transition-all uppercase"
+                                        placeholder="EJ: PIZZERÍA GALÁCTICA"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-[#FFD700] uppercase mb-3 tracking-widest">Email del Negocio</label>
+                                    <input
+                                        type="email"
+                                        value={newEmail}
+                                        onChange={e => setNewEmail(e.target.value)}
+                                        className="w-full bg-white/5 border border-white/10 py-5 px-6 rounded-2xl text-white font-bold text-lg focus:outline-none focus:border-red-600 transition-all"
+                                        placeholder="EJ: admin@tienda.com"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-[#FFD700] uppercase mb-3 tracking-widest">Nombre del Dueño (Opcional)</label>
+                                    <input
+                                        type="text"
+                                        value={newOwnerName}
+                                        onChange={e => setNewOwnerName(e.target.value)}
+                                        className="w-full bg-white/5 border border-white/10 py-5 px-6 rounded-2xl text-white font-bold text-lg focus:outline-none focus:border-red-600 transition-all uppercase"
+                                        placeholder="EJ: JUAN PÉREZ"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex gap-4 pt-6">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowCreateForm(false)}
+                                    className="flex-1 py-5 bg-white/5 text-gray-500 font-black rounded-2xl uppercase text-[10px] tracking-widest hover:text-white transition-all"
+                                >
+                                    Abortar
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isCreating}
+                                    className="flex-[2] py-5 bg-red-600 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest shadow-xl shadow-red-600/30 active:scale-95 transition-all disabled:opacity-50"
+                                >
+                                    {isCreating ? 'PROCESANDO...' : 'REGISTRAR NAVE'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                )}
+
                 {/* Panel Inteligente de Flota */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="bg-[#0a0a0a] p-5 rounded-[2rem] border border-white/5">
@@ -285,8 +535,20 @@ const MasterApp: React.FC = () => {
                                         <span className="font-black text-2xl text-white italic leading-none">{store.name.charAt(0)}</span>
                                         <span className="text-[6px] font-black text-gray-600 mt-1 uppercase">ID: {store.id}</span>
                                     </div>
-                                    <div className="pt-1">
-                                        <h3 className="font-black text-xl uppercase italic group-hover:text-[#FFD700] transition-colors leading-none mb-3">{store.name}</h3>
+                                    <div className="pt-1 flex-1">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <h3 className="font-black text-xl uppercase italic group-hover:text-[#FFD700] transition-colors leading-none">{store.name}</h3>
+                                            <span className="text-[9px] font-black text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">PIN: {store.users?.find((u: any) => u.role === 'admin')?.pin || '0000'}</span>
+                                        </div>
+                                        <div className="flex flex-col gap-1 mb-3">
+                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-tighter truncate w-full flex items-center gap-2">
+                                                <span className="text-gray-600">CLIENTE:</span> {store.ownerName || 'PENDIENTE'}
+                                                <span className="text-gray-600 ml-2">CEL:</span> {store.ownerPhone || 'N/A'}
+                                            </p>
+                                            <p className="text-[8px] font-black text-gray-500 uppercase tracking-tighter truncate w-full">
+                                                <span className="text-gray-600">EMAIL:</span> {store.email || 'SIN CORREO'}
+                                            </p>
+                                        </div>
                                         <div className="flex items-center gap-4">
                                             <div className="flex flex-col">
                                                 <span className="text-[6px] font-black text-gray-500 uppercase">Aterrizaje</span>
@@ -317,8 +579,11 @@ const MasterApp: React.FC = () => {
                                 </div>
 
                                 <div className="flex gap-2">
-                                    <button onClick={() => { setSelectedStore(store); setIsStoreDetailOpen(true); }} className="flex-grow py-4 bg-white/5 border border-white/10 rounded-2xl font-black uppercase text-[9px] tracking-[0.2em] hover:bg-white/10 transition-all flex items-center justify-center gap-2">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                    <button onClick={() => selectedStore && onSelectStore && onSelectStore(selectedStore.id)} className="flex-grow py-4 bg-white/5 border border-white/10 rounded-2xl font-black uppercase text-[9px] tracking-[0.2em] hover:bg-[#FF0000] hover:text-white transition-all flex items-center justify-center gap-2">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
+                                        Controlar Nave
+                                    </button>
+                                    <button onClick={() => { setSelectedStore(store); setIsStoreDetailOpen(true); }} className="flex-grow py-4 bg-white/5 border border-white/10 rounded-2xl font-black uppercase text-[9px] tracking-[0.2em] hover:bg-white/10 transition-all flex items-center justify-center gap-2 text-gray-500">
                                         Expediente Final
                                     </button>
                                     <button onClick={() => toggleStatus(store.id)} className={`w-14 h-14 rounded-2xl border transition-all flex items-center justify-center group/sw ${store.status === 'active' ? 'bg-[#FF0000]/10 border-[#FF0000]/20 hover:bg-[#FF0000]' : 'bg-green-500/10 border-green-500/20 hover:bg-green-500'}`}>
@@ -356,22 +621,33 @@ const MasterApp: React.FC = () => {
                             <div className="flex-grow">
                                 <p className="text-[10px] font-black text-[#FFD700] uppercase tracking-widest mb-1">Expediente de Nave Inteligente</p>
                                 <h2 className="text-4xl font-black uppercase italic tracking-tighter mb-4">{selectedStore.name}</h2>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                                     <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
-                                        <span className="text-[7px] text-gray-500 font-black block uppercase mb-1">ID Único</span>
-                                        <span className="text-sm font-black font-mono text-white">{selectedStore.id}</span>
+                                        <span className="text-[7px] text-gray-500 font-black block uppercase mb-1">Dueño / Responsable</span>
+                                        <span className="text-sm font-black text-white">{selectedStore.ownerName || 'PENDIENTE'}</span>
                                     </div>
                                     <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
-                                        <span className="text-[7px] text-gray-500 font-black block uppercase mb-1">Primer Despegue</span>
-                                        <span className="text-sm font-black text-white">{selectedStore.activationDate}</span>
+                                        <span className="text-[7px] text-gray-500 font-black block uppercase mb-1">WhatsApp Sede</span>
+                                        <span className="text-sm font-black text-white">{selectedStore.ownerPhone || 'N/A'}</span>
+                                    </div>
+                                    <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                                        <span className="text-[7px] text-gray-500 font-black block uppercase mb-1">Email Contractual</span>
+                                        <span className="text-sm font-black text-white break-all">{selectedStore.email || 'N/A'}</span>
+                                    </div>
+                                    <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                                        <span className="text-[7px] text-gray-500 font-black block uppercase mb-1">ID Único de Sistema</span>
+                                        <span className="text-sm font-black font-mono text-white">{selectedStore.id}</span>
+                                    </div>
+                                    <div className="bg-white/5 p-3 rounded-2xl border border-white/5 relative group/pin">
+                                        <span className="text-[7px] text-gray-500 font-black block uppercase mb-1">PIN Maestro (Admin)</span>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-sm font-black text-amber-500">{selectedStore.users?.find((u: any) => u.role === 'admin')?.pin || '0000'}</span>
+                                            <button onClick={() => updateAdminPin(selectedStore.id)} className="text-[8px] font-black text-blue-500 uppercase hover:underline">Cambiar</button>
+                                        </div>
                                     </div>
                                     <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
                                         <span className="text-[7px] text-gray-500 font-black block uppercase mb-1">Próximo Saldo</span>
                                         <span className="text-sm font-black text-[#FFD700]">${(selectedStore.fixedFee + (selectedStore.totalSales * selectedStore.commissionRate)).toFixed(0)}</span>
-                                    </div>
-                                    <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
-                                        <span className="text-[7px] text-gray-500 font-black block uppercase mb-1">Status Actual</span>
-                                        <span className={`text-[9px] font-black uppercase ${selectedStore.status === 'active' ? 'text-green-500' : 'text-red-500'}`}>{selectedStore.status}</span>
                                     </div>
                                 </div>
                             </div>
@@ -447,7 +723,7 @@ const MasterApp: React.FC = () => {
                             menu: newMenu,
                             modifierGroups: newMods
                         } : s));
-                        alert("✅ Menú Sincronizado con la Nave");
+                        alert("✅ Menú Guardado Localmente. Recuerda 'Publicar en la Nube' para enviar a Supabase.");
                     }}
                     onUpdatePizzaConfig={(newIngs, newPrices) => {
                         setStores(prev => prev.map(s => s.id === selectedStore.id ? {
@@ -456,6 +732,7 @@ const MasterApp: React.FC = () => {
                             pizzaBasePrices: newPrices
                         } : s));
                     }}
+                    syncMenu={syncMenu}
                 />
             )}
 
