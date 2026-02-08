@@ -4,12 +4,12 @@
   "description": "Sistema profesional de facturación y pedidos Keclick.",
   "icons": [
     {
-      "src": "https://i.ibb.co/9HxvMhx/keclick-logo.png",
+      "src": "https://ui-avatars.com/api/?name=Keclick&background=0D8ABC&color=fff&size=192&font-size=0.5&rounded=true&bold=true&format=png",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "https://i.ibb.co/9HxvMhx/keclick-logo.png",
+      "src": "https://ui-avatars.com/api/?name=Keclick&background=0D8ABC&color=fff&size=512&font-size=0.5&rounded=true&bold=true&format=png",
       "type": "image/png",
       "sizes": "512x512"
     }
