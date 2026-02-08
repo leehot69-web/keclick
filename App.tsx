@@ -506,22 +506,94 @@ function App() {
   const executeClearCart = () => { setCart([]); setEditingReportId(null); setCustomerDetails({ name: '', phone: '', paymentMethod: 'Efectivo', instructions: '' }); setCurrentView('menu'); setIsAdminAuthForClearCart(false); };
 
   const finalizeOrder = (isPaid: boolean = true) => {
-    const tot = cart.reduce((a, i) => a + ((i.price + i.selectedModifiers.reduce((s, m) => s + m.option.price, 0)) * i.quantity), 0);
+    // RE-VALIDACIÓN INTEGRAL (Precios, Disponibilidad y Modificadores)
+    const productMaster = new Map<string, any>();
+    menu.forEach(cat => {
+      cat.items.forEach((item: any) => {
+        productMaster.set(item.name, item);
+      });
+    });
+
+    const modifierMaster = new Map<string, any>();
+    modifierGroups.forEach(group => {
+      modifierMaster.set(group.title, group);
+    });
+
+    let hasUnavailableItems = false;
+    const validatedCart = cart.map(item => {
+      const masterItem = productMaster.get(item.name);
+
+      // 1. Validar Existencia y Disponibilidad
+      if (!masterItem || !masterItem.available) {
+        hasUnavailableItems = true;
+        console.error(`❌ El producto ${item.name} ya no está disponible.`);
+        return item;
+      }
+
+      // 2. Validar Precios de Modificadores
+      const validatedModifiers = item.selectedModifiers.map(mod => {
+        const masterGroup = modifierMaster.get(mod.groupTitle);
+        if (masterGroup) {
+          const masterOption = masterGroup.options.find((o: any) => o.name === mod.option.name);
+          if (masterOption && masterOption.price !== mod.option.price) {
+            console.log(`⚠️ Precio de extra ${mod.option.name} actualizado: $${mod.option.price} -> $${masterOption.price}`);
+            return { ...mod, option: { ...mod.option, price: masterOption.price } };
+          }
+        }
+        return mod;
+      });
+
+      // 3. Validar Precio del Item Principal y Estación
+      return {
+        ...item,
+        price: masterItem.price,
+        selectedModifiers: validatedModifiers,
+        kitchenStations: masterItem.kitchenStations
+      };
+    });
+
+    if (hasUnavailableItems) {
+      alert("⚠️ Algunos productos en el carrito ya no están disponibles en el menú. Por favor, elimínalos para continuar.");
+      return;
+    }
+
+    const tot = validatedCart.reduce((acc, item) => {
+      const itemBasePrice = item.price;
+      const modsPrice = item.selectedModifiers.reduce((sum, m) => sum + m.option.price, 0);
+      return acc + ((itemBasePrice + modsPrice) * item.quantity);
+    }, 0);
     if (isPaid) setSettings(p => ({ ...p, lifetimeRevenueUSD: (p.lifetimeRevenueUSD || 0) + tot }));
+
     const ex = editingReportId ? reports.find(r => r.id === editingReportId) : null;
     const rep: SaleRecord = {
-      id: ex?.id || Math.random().toString(36).substr(2, 9), storeId: settings.storeId, date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString(),
-      tableNumber: parseInt(customerDetails.name) || 0, waiter: ex ? ex.waiter : (currentUser?.name || 'Sistema'), total: tot, order: cart, type: 'sale', customerName: customerDetails.name,
-      createdAt: ex?.createdAt || new Date().toISOString(), notes: isPaid ? customerDetails.paymentMethod : 'PENDIENTE', auditNotes: ex?.auditNotes || []
+      id: ex?.id || Math.random().toString(36).substr(2, 9),
+      storeId: settings.storeId,
+      date: new Date().toISOString().split('T')[0],
+      time: new Date().toLocaleTimeString(),
+      tableNumber: parseInt(customerDetails.name) || 0,
+      waiter: ex ? ex.waiter : (currentUser?.name || 'Sistema'),
+      total: tot,
+      order: validatedCart,
+      type: 'sale',
+      customerName: customerDetails.name,
+      createdAt: ex?.createdAt || new Date().toISOString(),
+      notes: isPaid ? customerDetails.paymentMethod : 'PENDIENTE',
+      auditNotes: ex?.auditNotes || []
     };
+
     if (ex) {
-      const rem = ex.order.filter(o => !cart.some(c => c.id === o.id));
+      const rem = ex.order.filter(o => !validatedCart.some(c => c.id === o.id));
       if (rem.length) rep.auditNotes = [...rep.auditNotes || [], ...rem.map(i => ({ timestamp: new Date().toISOString(), user: currentUser?.name || 'Admin', action: `Eliminó: ${i.quantity}x ${i.name}${removalReasons[i.id] ? ` (${removalReasons[i.id]})` : ''}` }))];
     }
+
     setReports(p => [rep, ...(editingReportId ? p.filter(r => r.id !== editingReportId) : p)]);
     safeSyncSale(rep).then(res => {
       if (!res.success && res.errorType === 'conflict') { alert("Conflicto de sincronización."); refreshData(); return; }
-      setLastSoldRecord({ cart: [...cart], details: { ...customerDetails } }); setCart([]); setEditingReportId(null); setCustomerDetails({ name: '', phone: '', paymentMethod: 'Efectivo', instructions: '' }); setCurrentView('success');
+      setLastSoldRecord({ cart: [...validatedCart], details: { ...customerDetails } });
+      setCart([]);
+      setEditingReportId(null);
+      setCustomerDetails({ name: '', phone: '', paymentMethod: 'Efectivo', instructions: '' });
+      setCurrentView('success');
     });
   };
 

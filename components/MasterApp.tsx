@@ -717,13 +717,27 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
                         setIsMenuEditorOpen(false);
                         setIsStoreDetailOpen(true);
                     }}
-                    onSave={(newMenu, newMods) => {
-                        setStores(prev => prev.map(s => s.id === selectedStore.id ? {
-                            ...s,
-                            menu: newMenu,
-                            modifierGroups: newMods
-                        } : s));
-                        alert("✅ Menú Guardado Localmente. Recuerda 'Publicar en la Nube' para enviar a Supabase.");
+                    onSave={async (newMenu, newMods) => {
+                        try {
+                            const { error } = await supabase
+                                .from('settings')
+                                .update({
+                                    menu: newMenu,
+                                    modifier_groups: newMods
+                                })
+                                .eq('store_id', selectedStore.id);
+
+                            if (error) throw error;
+
+                            setStores(prev => prev.map(s => s.id === selectedStore.id ? {
+                                ...s,
+                                menu: newMenu,
+                                modifierGroups: newMods
+                            } : s));
+                            alert("✅ Cambios guardados en la base de datos.");
+                        } catch (err: any) {
+                            alert("❌ Error al guardar: " + err.message);
+                        }
                     }}
                     onUpdatePizzaConfig={(newIngs, newPrices) => {
                         setStores(prev => prev.map(s => s.id === selectedStore.id ? {
