@@ -431,11 +431,11 @@ function App() {
     const updatedReports: SaleRecord[] = [];
 
     setReports(prev => {
-      const newReports = prev.map(r => {
+      return prev.map(r => {
         if (!reportIdsToUpdate.includes(r.id)) return r;
-
         const updated = {
           ...r,
+          _pendingSync: true, // Mark as pending immediately
           order: r.order.map((item: any) => {
             if (Object.values(item.kitchenStatus || {}).includes('ready')) {
               return { ...item, isServed: true };
@@ -446,21 +446,19 @@ function App() {
         updatedReports.push(updated);
         return updated;
       });
-      return newReports;
     });
 
-    // Enviar los cambios a Supabase para que persistan y se sincronicen en otros equipos
-    // SOLUCIÓN "SERVER VALIDATION": Usamos safeSyncSale para no pisar cierres ajenos
+    // Sincronizar
     setTimeout(async () => {
       for (const r of updatedReports) {
         const result = await safeSyncSale(r);
-        if (!result.success) {
-          if (result.errorType === 'conflict') {
-            console.error("Conflict detected while serving items:", r.id);
-          } else if (result.errorType === 'offline') {
-            console.warn("Items served offline (queued locally):", r.id);
-            setReports(prev => prev.map(pr => pr.id === r.id ? { ...pr, _pendingSync: true } : pr));
-          }
+        if (result.success) {
+          // Éxito: Quitar marca
+          setReports(prev => prev.map(pr => pr.id === r.id ? { ...pr, _pendingSync: undefined } : pr));
+        } else if (result.errorType === 'conflict') {
+          console.error("Conflict detected while serving items:", r.id);
+          setReports(prev => prev.map(pr => pr.id === r.id ? { ...pr, _pendingSync: undefined } : pr));
+          refreshData();
         }
       }
     }, 100);
@@ -712,13 +710,36 @@ function App() {
     setPendingVoidReportId(reportId);
   };
 
-  const executeVoidReport = () => {
+  const executeVoidReport = async () => {
     if (!pendingVoidReportId) return;
-    const updatedReports = reports.map(r => r.id === pendingVoidReportId ? { ...r, notes: 'ANULADO', total: 0, type: 'refund' as const } : r);
-    setReports(updatedReports);
-    const voidedReport = updatedReports.find(r => r.id === pendingVoidReportId);
-    if (voidedReport) syncSale(voidedReport);
+
+    const target = reports.find(r => r.id === pendingVoidReportId);
+    if (!target) return;
+
+    const updated: SaleRecord = {
+      ...target,
+      notes: 'ANULADO',
+      total: 0,
+      type: 'refund' as const,
+      _pendingSync: true
+    };
+
+    // 1. Actualización inmediata
+    setReports(prev => prev.map(r => r.id === pendingVoidReportId ? updated : r));
     setPendingVoidReportId(null);
+
+    // 2. Sincronizar
+    const result = await safeSyncSale(updated);
+
+    if (!result.success) {
+      if (result.errorType === 'conflict') {
+        alert("⚠️ COORDINACIÓN: Esta orden ya fue alterada o cerrada. Actualizando...");
+        refreshData();
+      }
+    } else {
+      // Éxito: Quitar marca
+      setReports(prev => prev.map(r => r.id === target.id ? { ...r, _pendingSync: undefined } : r));
+    }
   };
 
 
@@ -1287,11 +1308,11 @@ function App() {
                         settings={settings}
                         currentUser={currentUser}
                         onUpdateItemStatus={async (reportId, itemId, stationId, status) => {
-                          let updatedReportToSync: SaleRecord | null = null;
                           const updatedReports = reports.map(r => {
                             if (r.id !== reportId) return r;
-                            const updated = {
+                            return {
                               ...r,
+                              _pendingSync: true, // Optimistically mark as pending sync
                               order: r.order.map((item: any) => {
                                 if (item.id !== itemId) return item;
                                 const currentStatus = item.kitchenStatus || {};
@@ -1301,25 +1322,27 @@ function App() {
                                 };
                               })
                             };
-                            updatedReportToSync = updated;
-                            return updated;
                           });
 
+                          // 1. Actualización inmediata (Optimistic UI)
+                          setReports(updatedReports);
+
+                          // 2. Sincronizar
+                          const updatedReportToSync = updatedReports.find(r => r.id === reportId);
                           if (updatedReportToSync) {
                             const result = await safeSyncSale(updatedReportToSync);
 
-                            // Si es conflicto real (alguien más lo modificó), bloqueamos y refrescamos
-                            if (!result.success && result.errorType === 'conflict') {
-                              alert("⚠️ COMANDA DESACTUALIZADA:\nEl mesero ya cerró o anuló esta orden. No se puede actualizar el estado.");
-                              refreshData();
-                              return;
-                            }
-
-                            // Si es éxito o offline/error, permitimos la actualización local
-                            setReports(updatedReports);
-
-                            if (result.errorType === 'offline') {
-                              setReports(prev => prev.map(pr => pr.id === reportId ? { ...pr, _pendingSync: true } : pr));
+                            if (!result.success) {
+                              if (result.errorType === 'conflict') {
+                                alert("⚠️ COMANDA DESACTUALIZADA:\nEl mesero ya cerró o anuló esta orden.");
+                                refreshData();
+                              } else if (result.errorType === 'offline') {
+                                // Ya está marcado como _pendingSync, el hook lo reintentará
+                                console.log("Update guardado localmente (offline)");
+                              }
+                            } else {
+                              // Éxito: Quitamos la marca de pendiente
+                              setReports(prev => prev.map(r => r.id === reportId ? { ...r, _pendingSync: undefined } : r));
                             }
                           }
                         }}
@@ -1328,19 +1351,26 @@ function App() {
                             const targetReport = reports.find(r => r.id === reportId);
                             if (!targetReport) return;
 
-                            const updated: SaleRecord = { ...targetReport, closed: true };
-                            const result = await safeSyncSale(updated);
+                            const updated: SaleRecord = {
+                              ...targetReport,
+                              closed: true,
+                              _pendingSync: true
+                            };
 
-                            if (!result.success && result.errorType === 'conflict') {
-                              alert("⚠️ COMANDA YA GESTIONADA:\nEl mesero ya cerró o modificó esta orden.");
-                              refreshData();
-                              return;
-                            }
-
+                            // 1. Actualización inmediata
                             setReports(prev => prev.map(r => r.id === reportId ? updated : r));
 
-                            if (result.errorType === 'offline') {
-                              setReports(prev => prev.map(pr => pr.id === reportId ? { ...pr, _pendingSync: true } : pr));
+                            // 2. Sincronizar
+                            const result = await safeSyncSale(updated);
+
+                            if (!result.success) {
+                              if (result.errorType === 'conflict') {
+                                alert("⚠️ COMANDA YA GESTIONADA:\nEl mesero ya cerró o modificó esta orden.");
+                                refreshData();
+                              }
+                            } else {
+                              // Éxito: Quitar marca de pendiente
+                              setReports(prev => prev.map(r => r.id === reportId ? { ...r, _pendingSync: undefined } : r));
                             }
                           }
                         }}
