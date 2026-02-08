@@ -98,60 +98,83 @@ export const useSupabaseSync = (
         createdAt: s.created_at
     });
 
-    const fetchData = async () => {
+    const fetchData = useCallback(async () => {
         if (!currentStoreId) return;
         lastFetchRef.current = Date.now();
-        console.log('🔄 Manually refreshing data from Supabase...');
+        console.log('🔄 Sincronizando datos desde Supabase...');
 
-        // Ventas
-        const { data: salesData } = await supabase
-            .from('sales')
-            .select('*')
-            .eq('store_id', currentStoreId)
-            .order('created_at', { ascending: false });
+        try {
+            // Ventas
+            const { data: salesData, error: salesError } = await supabase
+                .from('sales')
+                .select('*')
+                .eq('store_id', currentStoreId)
+                .order('created_at', { ascending: false })
+                .limit(60);
 
-        if (salesData) {
-            setReports(prev => {
-                const pendingMap = new Map(prev.filter(p => p._pendingSync).map(p => [p.id, p]));
-                const remoteMapped = salesData.map(mapSaleFromSupabase);
-                const merged = remoteMapped.map(r => pendingMap.get(r.id) || r);
-                const remoteIds = new Set(remoteMapped.map(r => r.id));
-                const newLocals = prev.filter(p => p._pendingSync && !remoteIds.has(p.id));
-                return [...newLocals, ...merged];
-            });
+            if (salesError) throw salesError;
+
+            if (salesData) {
+                setReports(prev => {
+                    // Preservar cambios locales pendientes (Offline First)
+                    const pendingMap = new Map(prev.filter(p => p._pendingSync).map(p => [p.id, p]));
+                    const remoteMapped = salesData.map(mapSaleFromSupabase);
+
+                    // Si tenemos versión local pendiente, la mantenemos sobre la remota
+                    const merged = remoteMapped.map(r => pendingMap.get(r.id) || r);
+
+                    // Añadimos las creadas localmente que aún no existen en remoto
+                    const remoteIds = new Set(remoteMapped.map(r => r.id));
+                    const newLocals = prev.filter(p => p._pendingSync && !remoteIds.has(p.id));
+
+                    const finalReports = [...newLocals, ...merged];
+
+                    const currentDataStr = JSON.stringify(prev);
+                    const newDataStr = JSON.stringify(finalReports);
+
+                    if (currentDataStr !== newDataStr) {
+                        console.log('✨ Datos actualizados (preservando cambios locales)...');
+                        forceUIUpdate();
+                        return finalReports;
+                    }
+                    return prev;
+                });
+            }
+
+            // Cierres
+            const { data: closuresData } = await supabase
+                .from('day_closures')
+                .select('*')
+                .eq('store_id', currentStoreId)
+                .order('closed_at', { ascending: false });
+
+            if (closuresData) {
+                setDayClosures(closuresData.map(c => ({
+                    ...c,
+                    storeId: c.store_id,
+                    reportIds: c.report_ids
+                })));
+            }
+
+            // Settings
+            const { data: settingsData } = await supabase
+                .from('settings')
+                .select('*')
+                .eq('store_id', currentStoreId)
+                .single();
+
+            if (settingsData) {
+                setSettings({
+                    ...settingsData,
+                    storeId: settingsData.store_id,
+                    kitchenStations: settingsData.kitchen_stations,
+                    users: settingsData.users
+                });
+            }
+        } catch (err) {
+            console.error("❌ Error en fetchData:", err);
         }
-
-        // Cierres
-        const { data: closuresData } = await supabase
-            .from('day_closures')
-            .select('*')
-            .eq('store_id', currentStoreId)
-            .order('closed_at', { ascending: false });
-
-        if (closuresData) {
-            setDayClosures(closuresData.map(c => ({
-                ...c,
-                storeId: c.store_id,
-                reportIds: c.report_ids
-            })));
-        }
-
-        // Settings (Solo si es necesario, pero usualmente si para sincronizar usuarios)
-        const { data: settingsData } = await supabase
-            .from('settings')
-            .select('*')
-            .eq('store_id', currentStoreId)
-            .single();
-
-        if (settingsData) {
-            setSettings({
-                ...settingsData,
-                storeId: settingsData.store_id,
-                kitchenStations: settingsData.kitchen_stations,
-                users: settingsData.users
-            });
-        }
-    };
+    }, [currentStoreId, setReports, setDayClosures, setSettings]);
 
     // 1. Carga inicial
     useEffect(() => {
@@ -176,82 +199,7 @@ export const useSupabaseSync = (
         let channel: RealtimeChannel | null = null;
         let pollingInterval: any;
 
-        const fetchData = async () => {
-            if (!currentStoreId) return;
-            lastFetchRef.current = Date.now();
-            console.log('🔄 Sincronizando datos (Heartbeat/Manual)...');
 
-            try {
-                // Ventas
-                const { data: salesData } = await supabase
-                    .from('sales')
-                    .select('*')
-                    .eq('store_id', currentStoreId)
-                    .order('created_at', { ascending: false })
-                    .limit(60);
-
-                if (salesData) {
-                    setReports(prev => {
-                        // Preservar cambios locales pendientes (Offline First)
-                        const pendingMap = new Map(prev.filter(p => p._pendingSync).map(p => [p.id, p]));
-                        const remoteMapped = salesData.map(mapSaleFromSupabase);
-
-                        // Si tenemos versión local pendiente, la mantenemos sobre la remota
-                        const merged = remoteMapped.map(r => pendingMap.get(r.id) || r);
-
-                        // Añadimos las creadas localmente que aún no existen en remoto
-                        const remoteIds = new Set(remoteMapped.map(r => r.id));
-                        const newLocals = prev.filter(p => p._pendingSync && !remoteIds.has(p.id));
-
-                        const finalReports = [...newLocals, ...merged];
-
-                        // Optimización: Solo actualizar si hay cambios reales (comparando strings para simplicidad)
-                        const currentDataStr = JSON.stringify(prev);
-                        const newDataStr = JSON.stringify(finalReports);
-
-                        if (currentDataStr !== newDataStr) {
-                            console.log('✨ Datos sincronizados (preservando offline changes)...');
-                            forceUIUpdate();
-                            return finalReports;
-                        }
-                        return prev;
-                    });
-                }
-
-                // Cierres
-                const { data: closuresData } = await supabase
-                    .from('day_closures')
-                    .select('*')
-                    .eq('store_id', currentStoreId)
-                    .order('closed_at', { ascending: false });
-
-                if (closuresData) {
-                    setDayClosures(closuresData.map(c => ({
-                        ...c,
-                        storeId: c.store_id,
-                        reportIds: c.report_ids
-                    })));
-                }
-
-                // Settings
-                const { data: settingsData } = await supabase
-                    .from('settings')
-                    .select('*')
-                    .eq('store_id', currentStoreId)
-                    .single();
-
-                if (settingsData) {
-                    setSettings({
-                        ...settingsData,
-                        storeId: settingsData.store_id,
-                        kitchenStations: settingsData.kitchen_stations,
-                        users: settingsData.users
-                    });
-                }
-            } catch (err) {
-                console.error("Error en fetchData:", err);
-            }
-        };
 
         const subscribe = () => {
             if (channel) supabase.removeChannel(channel);
@@ -302,10 +250,16 @@ export const useSupabaseSync = (
                         setReports(prev => {
                             if (payload.eventType === 'INSERT') {
                                 if (prev.some(r => r.id === fullSale.id)) return prev;
-                                console.log('✅ Nuevo pedido recibido en tiempo real:', fullSale.id);
+                                console.log('✅ Nuevo pedido recibido:', fullSale.id);
                                 return [fullSale, ...prev];
                             } else {
-                                console.log('📝 Pedido actualizado en tiempo real:', fullSale.id);
+                                // ACTUALIZACIÓN: Verificamos si tenemos cambios locales pendientes
+                                const existing = prev.find(r => r.id === fullSale.id);
+                                if (existing?._pendingSync) {
+                                    console.log('�️ Ignorando update remoto (tenemos cambios locales pendientes):', fullSale.id);
+                                    return prev;
+                                }
+                                console.log('📝 Pedido actualizado:', fullSale.id);
                                 return prev.map(r => r.id === fullSale.id ? fullSale : r);
                             }
                         });
@@ -447,7 +401,7 @@ export const useSupabaseSync = (
             document.removeEventListener('visibilitychange', visibilityHandler);
             if (channel) supabase.removeChannel(channel);
         };
-    }, [currentStoreId, setReports, setDayClosures]);
+    }, [currentStoreId, setReports, setDayClosures, fetchData]); // Añadido fetchData a dependencias
 
     // Efecto para mantener sincronizada la referencia del syncStatus
     // CRÍTICO: El Worker lee syncStatusRef.current para saber si debe hacer polling
@@ -525,8 +479,8 @@ export const useSupabaseSync = (
                 order_code: sale.orderCode,
                 closed: sale.closed,
                 type: sale.type,
-                audit_notes: sale.auditNotes,
-                updated_at: new Date().toISOString() // Marcar tiempo de actualización
+                audit_notes: sale.auditNotes
+                // updated_at removido para evitar error si no existe la columna
             });
 
             if (upsertError) {
