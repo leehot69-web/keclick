@@ -455,8 +455,12 @@ function App() {
       for (const r of updatedReports) {
         const result = await safeSyncSale(r);
         if (!result.success) {
-          console.error("Conflict detected while serving items:", r.id);
-          // Opcional: Avisar discretamente o refrescar
+          if (result.errorType === 'conflict') {
+            console.error("Conflict detected while serving items:", r.id);
+          } else if (result.errorType === 'offline') {
+            console.warn("Items served offline (queued locally):", r.id);
+            setReports(prev => prev.map(pr => pr.id === r.id ? { ...pr, _pendingSync: true } : pr));
+          }
         }
       }
     }, 100);
@@ -998,13 +1002,25 @@ function App() {
 
     // SOLUCIÓN "SERVER VALIDATION": Usamos safeSyncSale con manejo de conflictos
     safeSyncSale(newReport).then((result) => {
+      // Manejo de errores específicos
       if (!result.success) {
-        alert("⚠️ ERROR DE COORDINACIÓN:\n\nEsta mesa ya fue cerrada, anulada o modificada por otro usuario mientras preparabas el pedido.\n\nTu pantalla se actualizará ahora con la información real.");
-        refreshData(); // Forzar carga limpia del servidor
-        return;
+        if (result.errorType === 'conflict') {
+          alert("⚠️ ERROR DE COORDINACIÓN:\n\nEsta mesa ya fue cerrada, anulada o modificada por otro usuario mientras preparabas el pedido.\n\nTu pantalla se actualizará ahora con la información real.");
+          refreshData(); // Forzar carga limpia del servidor
+          return;
+        }
+
+        if (result.errorType === 'offline') {
+          alert("⚠️ SIN CONEXIÓN: Pedido guardado en este dispositivo.\nSe sincronizará automáticamente al volver la red.");
+          setReports(prev => prev.map(r => r.id === newReport.id ? { ...r, _pendingSync: true } : r));
+        } else {
+          // Otro error (API, servidor, etc)
+          console.warn("Error de sincronización (no conflicto):", result);
+          // Permitimos continuar confiando en el guardado local
+        }
       }
 
-      // Si todo salió bien, procedemos con el éxito
+      // Si todo salió bien O es un error recuperable (offline/server error), procedemos con el éxito
       setLastSoldRecord({ cart: [...cart], details: { ...customerDetails } });
       setCart([]);
       setEditingReportId(null);
@@ -1291,12 +1307,20 @@ function App() {
 
                           if (updatedReportToSync) {
                             const result = await safeSyncSale(updatedReportToSync);
-                            if (!result.success) {
+
+                            // Si es conflicto real (alguien más lo modificó), bloqueamos y refrescamos
+                            if (!result.success && result.errorType === 'conflict') {
                               alert("⚠️ COMANDA DESACTUALIZADA:\nEl mesero ya cerró o anuló esta orden. No se puede actualizar el estado.");
                               refreshData();
                               return;
                             }
+
+                            // Si es éxito o offline/error, permitimos la actualización local
                             setReports(updatedReports);
+
+                            if (result.errorType === 'offline') {
+                              setReports(prev => prev.map(pr => pr.id === reportId ? { ...pr, _pendingSync: true } : pr));
+                            }
                           }
                         }}
                         onCloseOrder={async (reportId) => {
@@ -1307,13 +1331,17 @@ function App() {
                             const updated: SaleRecord = { ...targetReport, closed: true };
                             const result = await safeSyncSale(updated);
 
-                            if (!result.success) {
+                            if (!result.success && result.errorType === 'conflict') {
                               alert("⚠️ COMANDA YA GESTIONADA:\nEl mesero ya cerró o modificó esta orden.");
                               refreshData();
                               return;
                             }
 
                             setReports(prev => prev.map(r => r.id === reportId ? updated : r));
+
+                            if (result.errorType === 'offline') {
+                              setReports(prev => prev.map(pr => pr.id === reportId ? { ...pr, _pendingSync: true } : pr));
+                            }
                           }
                         }}
                         onLogout={handleLogout}

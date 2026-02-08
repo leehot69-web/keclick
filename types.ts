@@ -193,6 +193,7 @@ export interface SaleRecord {
   closed?: boolean;
   createdAt?: string; // ISO string for precise time tracking
   auditNotes?: AuditEntry[];
+  _pendingSync?: boolean; // Indicates if the record needs to be synced to the cloud
 }
 
 export type UserRole = 'admin' | 'mesero' | 'cajero' | 'cocinero';

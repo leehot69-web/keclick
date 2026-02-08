@@ -111,9 +111,14 @@ export const useSupabaseSync = (
             .order('created_at', { ascending: false });
 
         if (salesData) {
-            // FORCE RE-RENDER: Always create a new array reference
-            // This ensures React detects the change even if content is similar
-            setReports([...salesData.map(mapSaleFromSupabase)]);
+            setReports(prev => {
+                const pendingMap = new Map(prev.filter(p => p._pendingSync).map(p => [p.id, p]));
+                const remoteMapped = salesData.map(mapSaleFromSupabase);
+                const merged = remoteMapped.map(r => pendingMap.get(r.id) || r);
+                const remoteIds = new Set(remoteMapped.map(r => r.id));
+                const newLocals = prev.filter(p => p._pendingSync && !remoteIds.has(p.id));
+                return [...newLocals, ...merged];
+            });
         }
 
         // Cierres
@@ -186,20 +191,31 @@ export const useSupabaseSync = (
                     .limit(60);
 
                 if (salesData) {
-                    const mapped = salesData.map(mapSaleFromSupabase);
+                    setReports(prev => {
+                        // Preservar cambios locales pendientes (Offline First)
+                        const pendingMap = new Map(prev.filter(p => p._pendingSync).map(p => [p.id, p]));
+                        const remoteMapped = salesData.map(mapSaleFromSupabase);
 
-                    // Solo actualizar si la cantidad de pedidos cambió o si el contenido es distinto
-                    // (Usamos JSON.stringify como una forma rápida y efectiva de comparar contenido de objetos)
-                    const currentDataStr = JSON.stringify(reports);
-                    const newDataStr = JSON.stringify(mapped);
+                        // Si tenemos versión local pendiente, la mantenemos sobre la remota
+                        const merged = remoteMapped.map(r => pendingMap.get(r.id) || r);
 
-                    if (currentDataStr !== newDataStr) {
-                        console.log('✨ Datos nuevos detectados, actualizando UI...');
-                        setReports(mapped);
-                        forceUIUpdate();
-                    } else {
-                        // console.log('😴 Sin cambios en los datos.');
-                    }
+                        // Añadimos las creadas localmente que aún no existen en remoto
+                        const remoteIds = new Set(remoteMapped.map(r => r.id));
+                        const newLocals = prev.filter(p => p._pendingSync && !remoteIds.has(p.id));
+
+                        const finalReports = [...newLocals, ...merged];
+
+                        // Optimización: Solo actualizar si hay cambios reales (comparando strings para simplicidad)
+                        const currentDataStr = JSON.stringify(prev);
+                        const newDataStr = JSON.stringify(finalReports);
+
+                        if (currentDataStr !== newDataStr) {
+                            console.log('✨ Datos sincronizados (preservando offline changes)...');
+                            forceUIUpdate();
+                            return finalReports;
+                        }
+                        return prev;
+                    });
                 }
 
                 // Cierres
@@ -462,8 +478,15 @@ export const useSupabaseSync = (
         if (error) console.error('Error syncing sale:', error);
     }, [currentStoreId]);
 
-    const safeSyncSale = useCallback(async (sale: SaleRecord): Promise<{ success: boolean, remoteData?: SaleRecord }> => {
-        if (!currentStoreId) return { success: false };
+    const safeSyncSale = useCallback(async (sale: SaleRecord): Promise<{ success: boolean, errorType?: 'offline' | 'conflict' | 'error', remoteData?: SaleRecord }> => {
+        if (!currentStoreId) return { success: false, errorType: 'error' };
+
+        // DETECCIÓN OFFLINE: Si no hay red, asumimos éxito local (se guardará en localStorage)
+        // pero avisamos que no se subió a la nube.
+        if (!navigator.onLine) {
+            console.warn('⚠️ Sin conexión. Guardando solo localmente.');
+            return { success: false, errorType: 'offline' };
+        }
 
         try {
             const { data: remoteData, error: fetchError } = await supabase
@@ -472,21 +495,51 @@ export const useSupabaseSync = (
                 .eq('id', sale.id)
                 .single();
 
-            if (fetchError && fetchError.code !== 'PGRST116') return { success: false };
+            if (fetchError && fetchError.code !== 'PGRST116') {
+                // Si falla el fetch por algo que no es "no encontrado", asumimos error de red o servidor
+                return { success: false, errorType: 'error' };
+            }
 
             if (remoteData) {
                 const remoteMapped = mapSaleFromSupabase(remoteData);
-                if (remoteMapped.closed && !sale.closed) return { success: false, remoteData: remoteMapped };
-                if (remoteMapped.notes === 'ANULADO') return { success: false, remoteData: remoteMapped };
+                // CONFLICTO REAL: Si en la nube ya está cerrada y aquí no, o si está anulada
+                if (remoteMapped.closed && !sale.closed) return { success: false, errorType: 'conflict', remoteData: remoteMapped };
+                if (remoteMapped.notes === 'ANULADO') return { success: false, errorType: 'conflict', remoteData: remoteMapped };
+
+                // Si la versión remota es MÁS RECIENTE que la nuestra (por updated_at o similar), también es conflicto
+                // Pero aquí asumimos que nuestra edición es la "verdad" si no está cerrada/anulada.
             }
 
-            await syncSale(sale);
+            // Intentar subir
+            const { error: upsertError } = await supabase.from('sales').upsert({
+                id: sale.id,
+                store_id: currentStoreId,
+                date: sale.date,
+                time: sale.time,
+                customer_name: sale.customerName,
+                table_number: sale.tableNumber,
+                waiter: sale.waiter,
+                total: sale.total,
+                order_data: sale.order,
+                notes: sale.notes,
+                order_code: sale.orderCode,
+                closed: sale.closed,
+                type: sale.type,
+                audit_notes: sale.auditNotes,
+                updated_at: new Date().toISOString() // Marcar tiempo de actualización
+            });
+
+            if (upsertError) {
+                console.error('Error syncing sale:', upsertError);
+                return { success: false, errorType: 'error' };
+            }
+
             return { success: true };
         } catch (err) {
             console.error('Error en safeSyncSale:', err);
-            return { success: false };
+            return { success: false, errorType: 'error' };
         }
-    }, [currentStoreId, syncSale]);
+    }, [currentStoreId]);
 
     const syncSettings = useCallback(async (newSettings: AppSettings) => {
         if (!currentStoreId) return;
@@ -526,6 +579,50 @@ export const useSupabaseSync = (
         });
         if (error) console.error('Error syncing closure:', error);
     }, [currentStoreId]);
+
+    // 4. Cola de Reintentos (Offline Sync Queue)
+    useEffect(() => {
+        // Solo intentar si estamos online y hay pendientes
+        if (syncStatus !== 'online') return;
+
+        const pending = reports.filter(r => r._pendingSync);
+        if (pending.length === 0) return;
+
+        const processQueue = async () => {
+            console.log(`🔄 Procesando cola de sincronización (${pending.length} items)...`);
+
+            let processedCount = 0;
+            // Copia estática para iterar
+            for (const r of pending) {
+                // Intentamos sincronizar
+                // IMPORTANTE: Al pasar 'r', pasamos el estado local con nuestros cambios
+                const result = await safeSyncSale(r);
+
+                if (result.success) {
+                    processedCount++;
+                    // Éxito: Quitamos la marca de pendiente
+                    setReports(prev => prev.map(current => current.id === r.id ? { ...current, _pendingSync: undefined } : current));
+                } else if (result.errorType === 'conflict') {
+                    // Conflicto: Ya no tiene sentido reintentar lo nuestro porque ganó el servidor (cerrado/anulado)
+                    console.warn(`⚠️ Conflicto en cola para ${r.id}. Se detiene reintento.`);
+                    setReports(prev => prev.map(current => current.id === r.id ? { ...current, _pendingSync: undefined } : current));
+                    // Forzar un refresh real para traer la versión correcta
+                    fetchData();
+                }
+                // Si es error de red o desconocido, mantenemos el flag para el siguiente intento
+            }
+
+            if (processedCount > 0) {
+                console.log(`✅ ${processedCount} items sincronizados desde la cola offline.`);
+                forceUIUpdate();
+            }
+        };
+
+        // Debounce: Esperar 3 segundos estable antes de procesar la cola
+        // Esto evita saturar al reconectar
+        const timer = setTimeout(processQueue, 3000);
+        return () => clearTimeout(timer);
+    }, [reports, syncStatus, safeSyncSale]); // Se re-ejecuta al cambiar reports (bien, para actualizar cola)
 
     // Memorizar el objeto de retorno para estabilidad de los consumidores
     return useMemo(() => ({
