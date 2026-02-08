@@ -5,9 +5,7 @@ const CACHE_NAME = 'sistema-pedidos-v3';
 const URLS_TO_CACHE = [
   '/',
   '/index.html',
-  '/manifest.json',
-  'https://cdn.tailwindcss.com',
-  'https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap'
+  '/manifest.json'
 ];
 
 self.addEventListener('install', event => {
