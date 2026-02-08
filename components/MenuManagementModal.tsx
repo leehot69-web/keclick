@@ -9,7 +9,7 @@ import PizzaIngredientFormModal from './PizzaIngredientFormModal';
 interface MenuManagementModalProps {
   menu: MenuCategory[];
   modifierGroups: ModifierGroup[];
-  onSave: (menu: MenuCategory[], modifierGroups: ModifierGroup[]) => void;
+  onSave: (menu: MenuCategory[], modifierGroups: ModifierGroup[]) => Promise<void> | void;
   syncMenu?: (menu: MenuCategory[], modifierGroups: ModifierGroup[]) => Promise<{ success: boolean; error?: any }>;
   onClose: () => void;
   pizzaIngredients: PizzaIngredient[];
@@ -236,10 +236,18 @@ const MenuManagementModal: React.FC<MenuManagementModalProps> = (props) => {
     setEditingModifierGroup(null);
   };
 
-  const handleFinalSave = () => {
-    onSave(localMenu, localModifierGroups);
-    onUpdatePizzaConfig(localPizzaIngredients, localPizzaBasePrices);
-    onClose();
+  const [isSavingLocal, setIsSavingLocal] = useState(false);
+  const handleFinalSave = async () => {
+    setIsSavingLocal(true);
+    try {
+      await onSave(localMenu, localModifierGroups);
+      onUpdatePizzaConfig(localPizzaIngredients, localPizzaBasePrices);
+      // El modal se cierra desde el padre si onSave tiene éxito
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSavingLocal(false);
+    }
   };
 
   const handleCloudSync = async () => {
@@ -412,7 +420,13 @@ const MenuManagementModal: React.FC<MenuManagementModalProps> = (props) => {
             </div>
             <div className="flex gap-4">
               <button onClick={onClose} className="flex-1 py-4 font-black text-gray-400 uppercase tracking-widest text-xs">Cancelar</button>
-              <button onClick={handleFinalSave} className="flex-[2] py-4 bg-red-600 text-white font-black uppercase tracking-widest text-sm rounded-2xl shadow-xl shadow-red-100 active:scale-95 transition-all">Guardar Localmente</button>
+              <button
+                disabled={isSavingLocal}
+                onClick={handleFinalSave}
+                className="flex-[2] py-4 bg-red-600 text-white font-black uppercase tracking-widest text-sm rounded-2xl shadow-xl shadow-red-100 active:scale-95 transition-all disabled:opacity-50"
+              >
+                {isSavingLocal ? 'Guardando...' : 'Guardar y Publicar'}
+              </button>
             </div>
           </div>
         </div>

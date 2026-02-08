@@ -99,20 +99,49 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
             return;
         }
 
-        // Obtener ventas totales resumidas por tienda
-        const { data: salesSum } = await supabase
-            .rpc('get_stores_sales_summary'); // Necesitaríamos este RPC o sumarlos manualmente
-
         const mappedStores: ManagedStore[] = await Promise.all(storesData.map(async (s: any) => {
-            // Suma manual de ventas si no hay RPC
+            // 1. Obtener Ventas
             const { data: salesData } = await supabase
                 .from('sales')
                 .select('total')
                 .eq('store_id', s.id);
-
             const totalSales = salesData?.reduce((acc, curr) => acc + (curr.total || 0), 0) || 0;
 
-            const st = s.settings || {};
+            // 2. Obtener Menú Real (NUEVAS TABLAS)
+            const { data: cats } = await supabase.from('menu_categories').select('*').eq('store_id', s.id).order('order_index');
+            const { data: items } = await supabase.from('menu_items').select('*').eq('store_id', s.id);
+            const { data: mods } = await supabase.from('modifier_groups').select('*').eq('store_id', s.id);
+
+            let realMenu = s.settings?.menu || KECLICK_MENU_DATA;
+            if (cats && cats.length > 0 && items) {
+                realMenu = cats.map(c => ({
+                    title: c.title,
+                    items: items.filter(i => i.category_id === c.id).map(i => ({
+                        name: i.name,
+                        price: parseFloat(i.price),
+                        available: i.available,
+                        description: i.description,
+                        image: i.image,
+                        isPizza: i.is_pizza,
+                        isSpecialPizza: i.is_special_pizza,
+                        defaultIngredients: i.default_ingredients,
+                        isCombo: i.is_combo,
+                        comboIncludes: i.combo_includes,
+                        kitchenStations: i.kitchen_stations,
+                        modifierGroupTitles: i.modifier_group_titles
+                    }))
+                }));
+            }
+
+            const realMods = mods && mods.length > 0 ? mods.map(m => ({
+                title: m.title,
+                selectionType: m.selection_type,
+                minSelection: m.min_selection,
+                maxSelection: m.max_selection,
+                options: m.options,
+                freeSelectionCount: m.free_selection_count,
+                extraPrice: m.extra_price
+            })) : (s.settings?.modifier_groups || KECLICK_MODIFIERS);
 
             return {
                 id: s.id,
@@ -129,9 +158,9 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
                 billingModel: 'subscription',
                 commissionRate: 0,
                 fixedFee: 0,
-                menu: st.menu || KECLICK_MENU_DATA,
-                modifierGroups: st.modifier_groups || KECLICK_MODIFIERS,
-                users: st.users || []
+                menu: realMenu,
+                modifierGroups: realMods,
+                users: s.settings?.users || []
             };
         }));
 
@@ -719,6 +748,8 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
                     }}
                     onSave={async (newMenu, newMods) => {
                         try {
+                            setIsLoading(true); // Mostrar carga en el dashboard
+                            // 1. Guardar en Settings (Respaldo)
                             const { error } = await supabase
                                 .from('settings')
                                 .update({
@@ -729,14 +760,20 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
 
                             if (error) throw error;
 
-                            setStores(prev => prev.map(s => s.id === selectedStore.id ? {
-                                ...s,
-                                menu: newMenu,
-                                modifierGroups: newMods
-                            } : s));
-                            alert("✅ Cambios guardados en la base de datos.");
+                            // 2. Sincronizar automáticamente con las tablas normalizadas (Menú Real)
+                            const syncRes = await syncMenu(newMenu, newMods);
+                            if (!syncRes.success) throw syncRes.error;
+
+                            // 3. Recargar TODO desde la base de datos para estar seguros
+                            await fetchStores();
+
+                            alert("✅ Menú Guardado y Publicado en la Nube con éxito.");
+                            setIsMenuEditorOpen(false);
+                            setIsStoreDetailOpen(true);
                         } catch (err: any) {
-                            alert("❌ Error al guardar: " + err.message);
+                            alert("❌ Error al guardar y publicar: " + err.message);
+                        } finally {
+                            setIsLoading(false);
                         }
                     }}
                     onUpdatePizzaConfig={(newIngs, newPrices) => {
