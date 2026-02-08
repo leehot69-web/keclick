@@ -101,7 +101,7 @@ export const useSupabaseSync = (
     const fetchData = useCallback(async () => {
         if (!currentStoreId) return;
         lastFetchRef.current = Date.now();
-        console.log('🔄 Sincronizando datos desde Supabase...');
+        console.log('🔄 [SYNC] Recargando datos desde Supabase...');
 
         try {
             // Ventas
@@ -116,24 +116,18 @@ export const useSupabaseSync = (
 
             if (salesData) {
                 setReports(prev => {
-                    // Preservar cambios locales pendientes (Offline First)
                     const pendingMap = new Map(prev.filter(p => p._pendingSync).map(p => [p.id, p]));
                     const remoteMapped = salesData.map(mapSaleFromSupabase);
-
-                    // Si tenemos versión local pendiente, la mantenemos sobre la remota
                     const merged = remoteMapped.map(r => pendingMap.get(r.id) || r);
-
-                    // Añadimos las creadas localmente que aún no existen en remoto
                     const remoteIds = new Set(remoteMapped.map(r => r.id));
                     const newLocals = prev.filter(p => p._pendingSync && !remoteIds.has(p.id));
-
                     const finalReports = [...newLocals, ...merged];
 
                     const currentDataStr = JSON.stringify(prev);
                     const newDataStr = JSON.stringify(finalReports);
 
                     if (currentDataStr !== newDataStr) {
-                        console.log('✨ Datos actualizados (preservando cambios locales)...');
+                        console.log('✨ [SYNC] Datos de ventas actualizados.');
                         forceUIUpdate();
                         return finalReports;
                     }
@@ -171,10 +165,16 @@ export const useSupabaseSync = (
                     users: settingsData.users
                 });
             }
+            setSyncStatus(prev => prev === 'offline' ? 'polling' : prev);
         } catch (err) {
-            console.error("❌ Error en fetchData:", err);
+            console.error("❌ [SYNC] Error en fetchData:", err);
+            setSyncStatus('offline');
         }
     }, [currentStoreId, setReports, setDayClosures, setSettings]);
+
+    // Refs para evitar que los useEffect se reinicien si las funciones cambian
+    const fetchDataRef = useRef(fetchData);
+    useEffect(() => { fetchDataRef.current = fetchData; }, [fetchData]);
 
     // 1. Carga inicial
     useEffect(() => {
@@ -369,12 +369,10 @@ export const useSupabaseSync = (
 
         // Evento para cuando el usuario vuelve a la app
         const handleAutoRefresh = () => {
-            console.log('📱 Despertando App - Verificando conexión...');
-            // Solo refrescar si han pasado más de 5 segundos desde el último fetch
-            if (Date.now() - lastFetchRef.current > 5000) {
-                fetchData();
+            console.log('📱 [SYNC] Wake/Focus detectado...');
+            if (Date.now() - lastFetchRef.current > 3000) {
+                fetchDataRef.current();
             }
-            // Re-suscribir por si el WebSocket murió
             if (syncStatusRef.current !== 'online') {
                 subscribe();
             }
@@ -401,7 +399,7 @@ export const useSupabaseSync = (
             document.removeEventListener('visibilitychange', visibilityHandler);
             if (channel) supabase.removeChannel(channel);
         };
-    }, [currentStoreId, setReports, setDayClosures, fetchData]); // Añadido fetchData a dependencias
+    }, [currentStoreId, setReports, setDayClosures]); // Removido fetchData para evitar reinicios constantes
 
     // Efecto para mantener sincronizada la referencia del syncStatus
     // CRÍTICO: El Worker lee syncStatusRef.current para saber si debe hacer polling
@@ -536,47 +534,30 @@ export const useSupabaseSync = (
 
     // 4. Cola de Reintentos (Offline Sync Queue)
     useEffect(() => {
-        // Solo intentar si estamos online y hay pendientes
+        // Ejecutar cada vez que syncStatus pase a online O haya un cambio en reports
         if (syncStatus !== 'online') return;
 
-        const pending = reports.filter(r => r._pendingSync);
-        if (pending.length === 0) return;
-
         const processQueue = async () => {
-            console.log(`🔄 Procesando cola de sincronización (${pending.length} items)...`);
+            const pendingSales = reports.filter(r => r._pendingSync);
+            if (pendingSales.length === 0) return;
 
-            let processedCount = 0;
-            // Copia estática para iterar
-            for (const r of pending) {
-                // Intentamos sincronizar
-                // IMPORTANTE: Al pasar 'r', pasamos el estado local con nuestros cambios
+            console.log(`🔄 [SYNC] Procesando cola offline (${pendingSales.length} items)...`);
+
+            for (const r of pendingSales) {
                 const result = await safeSyncSale(r);
-
                 if (result.success) {
-                    processedCount++;
-                    // Éxito: Quitamos la marca de pendiente
-                    setReports(prev => prev.map(current => current.id === r.id ? { ...current, _pendingSync: undefined } : current));
+                    setReports(prev => prev.map(curr => curr.id === r.id ? { ...curr, _pendingSync: undefined } : curr));
                 } else if (result.errorType === 'conflict') {
-                    // Conflicto: Ya no tiene sentido reintentar lo nuestro porque ganó el servidor (cerrado/anulado)
-                    console.warn(`⚠️ Conflicto en cola para ${r.id}. Se detiene reintento.`);
-                    setReports(prev => prev.map(current => current.id === r.id ? { ...current, _pendingSync: undefined } : current));
-                    // Forzar un refresh real para traer la versión correcta
-                    fetchData();
+                    setReports(prev => prev.map(curr => curr.id === r.id ? { ...curr, _pendingSync: undefined } : curr));
+                    fetchDataRef.current();
                 }
-                // Si es error de red o desconocido, mantenemos el flag para el siguiente intento
-            }
-
-            if (processedCount > 0) {
-                console.log(`✅ ${processedCount} items sincronizados desde la cola offline.`);
-                forceUIUpdate();
             }
         };
 
-        // Debounce: Esperar 3 segundos estable antes de procesar la cola
-        // Esto evita saturar al reconectar
-        const timer = setTimeout(processQueue, 3000);
+        // Delay pequeño para evitar colisiones al reconectar
+        const timer = setTimeout(processQueue, 1500);
         return () => clearTimeout(timer);
-    }, [reports, syncStatus, safeSyncSale]); // Se re-ejecuta al cambiar reports (bien, para actualizar cola)
+    }, [syncStatus, reports.length]); // Solo re-ejecutar si cambia el status o la CANTIDAD de reports (nuevo offline)
 
     // Memorizar el objeto de retorno para estabilidad de los consumidores
     return useMemo(() => ({
