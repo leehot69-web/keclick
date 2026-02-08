@@ -488,14 +488,23 @@ function App() {
   const textEncoder = new TextEncoder();
 
   useEffect(() => {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+
+    if (isStandalone) {
+      setShowInstallBtn(false);
+      console.log('App is running in standalone mode (InstalledPWA)');
+      return;
+    }
+
     const userAgent = window.navigator.userAgent.toLowerCase();
     if (/iphone|ipad|ipod/.test(userAgent)) {
       setPlatform('ios');
-      if (!window.matchMedia('(display-mode: standalone)').matches) {
-        setShowInstallBtn(true);
-      }
+      setShowInstallBtn(true);
     } else if (/android/.test(userAgent)) {
       setPlatform('android');
+      // En Android esperamos el evento, pero si no llega y no es standalone, 
+      // podríamos mostrarlo igual para guiar al usuario (opcional)
+      // Por ahora confiamos en beforeinstallprompt para Android
     }
 
     const handlePrompt = (e: any) => {
@@ -1117,17 +1126,19 @@ function App() {
                 </button>
               </div>
 
-              <div className="mt-8 flex justify-center">
-                <button
-                  onClick={handleInstallClick}
-                  className="flex items-center gap-2 px-6 py-3 bg-blue-500/10 text-blue-400 rounded-2xl font-black uppercase text-[10px] tracking-widest border border-blue-500/20 active:scale-95 transition-all"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                  Instalar Aplicación
-                </button>
-              </div>
+              {showInstallBtn && (
+                <div className="mt-8 flex justify-center">
+                  <button
+                    onClick={handleInstallClick}
+                    className="flex items-center gap-2 px-6 py-3 bg-blue-500/10 text-blue-400 rounded-2xl font-black uppercase text-[10px] tracking-widest border border-blue-500/20 active:scale-95 transition-all"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Instalar Aplicación
+                  </button>
+                </div>
+              )}
 
               <p className="mt-12 text-[8px] font-black text-gray-600 uppercase tracking-widest leading-none">
                 {settings.businessName} • ID: {settings.storeId}
@@ -1376,15 +1387,17 @@ function App() {
                     </button>
                   )}
 
-                  <button
-                    onClick={handleInstallClick}
-                    className="flex flex-col items-center gap-1 text-blue-600 animate-pulse bg-blue-50 px-3 py-1 rounded-xl border border-blue-100"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    <span className="text-[8px] font-black uppercase text-blue-700">APP</span>
-                  </button>
+                  {showInstallBtn && (
+                    <button
+                      onClick={handleInstallClick}
+                      className="flex flex-col items-center gap-1 text-blue-600 animate-pulse bg-blue-50 px-3 py-1 rounded-xl border border-blue-100"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      <span className="text-[8px] font-black uppercase text-blue-700">APP</span>
+                    </button>
+                  )}
 
                   <button onClick={handleManualSync} className={`flex flex-col items-center gap-1 relative ${isSyncing ? 'text-brand' : 'text-gray-400'}`}>
                     <span className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-white ${syncStatus === 'online' ? 'bg-green-500' : syncStatus === 'polling' ? 'bg-amber-500 animate-pulse' : 'bg-gray-400'}`}></span>
