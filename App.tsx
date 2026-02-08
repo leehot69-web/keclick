@@ -1331,13 +1331,13 @@ function App() {
                 {/* NOTIFICACIÓN (PREPARANDO) DE COCINA HACIA MESERO/ADMIN */}
                 {currentUser && (currentUser.role === 'mesero' || currentUser.role === 'admin') && hasPreparingPlates && currentView !== 'kitchen' && (
                   <div
-                    className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 px-6 py-3 rounded-full shadow-lg font-black text-xs uppercase tracking-widest z-50 flex items-center gap-3 animate-pulse cursor-pointer border-2 border-yellow-500"
-                    onClick={() => setShowMasterDashboard(true)} // Admin click to dashboard
+                    className={`fixed bottom-24 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 px-6 py-3 rounded-full shadow-lg font-black text-xs uppercase tracking-widest z-50 flex items-center gap-3 animate-pulse border-2 border-yellow-500 ${currentUser.role === 'admin' ? 'cursor-pointer' : ''}`}
+                    onClick={() => currentUser.role === 'admin' && setShowMasterDashboard(true)}
                   >
                     <span className="w-2 h-2 bg-yellow-600 rounded-full animate-ping"></span>
                     <div className="flex gap-4 overflow-hidden whitespace-nowrap max-w-[70vw]">
                       <div className="animate-marquee inline-block">
-                        {preparingPlatesDetails.map((item, idx) => (<span key={idx} className="mr-8">🔥 {item.itemName} ({item.table})</span>))}
+                        {preparingPlatesDetails.map((item, idx) => item ? (<span key={idx} className="mr-8">🔥 {item.itemName || 'Item'} ({item.table || '?'})</span>) : null)}
                       </div>
                     </div>
                   </div>
