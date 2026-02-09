@@ -403,12 +403,12 @@ function App() {
   const handlePrintOrder = async (overrideStatus?: string, isReprint: boolean = false) => {
     if (!printerCharacteristic) return;
     const isEdit = !!editingReportId;
-    const newItems = cart.filter(i => !i.isServed);
+    const newItems = cart.filter(i => !i.isOriginal);
     const shouldPartial = isEdit && overrideStatus === 'POR COBRAR' && newItems.length > 0;
     const items = shouldPartial ? newItems : cart;
     const cust = overrideStatus ? { ...customerDetails, paymentMethod: overrideStatus } : customerDetails;
     const title = shouldPartial ? "ADICIONAL - POR PAGAR" : (isReprint ? "RECIBO (COPIA)" : "RECIBO");
-    const prevTotal = shouldPartial ? cart.reduce((acc, i) => i.isServed ? acc + ((i.price + i.selectedModifiers.reduce((s, m) => s + m.option.price, 0)) * i.quantity) : acc, 0) : 0;
+    const prevTotal = shouldPartial ? cart.reduce((acc, i) => i.isOriginal ? acc + ((i.price + i.selectedModifiers.reduce((s, m) => s + m.option.price, 0)) * i.quantity) : acc, 0) : 0;
     const cmds = generateReceiptCommands(items, cust, { ...settings, businessName }, currentUser?.name || 'Sistema', title, prevTotal);
     await sendDataToPrinter(printerCharacteristic, textEncoder.encode(cmds));
   };
@@ -424,8 +424,8 @@ function App() {
   };
 
   const handleEditPendingReport = (report: SaleRecord, target: View = 'cart') => {
-    setCart((report.order as CartItem[]).map(i => ({ ...i, isServed: true })));
-    setCustomerDetails({ name: report.customerName || '', phone: '', paymentMethod: 'Efectivo', instructions: '' });
+    setCart((report.order as CartItem[]).map(i => ({ ...i, isOriginal: true, notes: 'original' })));
+    setCustomerDetails({ name: report.customerName || '', phone: report.customerPhone || '', paymentMethod: 'Efectivo', instructions: report.instructions || '' });
     setEditingReportId(report.id);
     setCurrentView(target);
   };
@@ -467,14 +467,17 @@ function App() {
 
   const handleUpdateQuantity = (id: string, qty: number) => {
     const it = cart.find(i => i.id === id);
-    if (it?.isServed && currentUser?.role !== 'admin') { alert("No puedes modificar un servido."); return; }
+    if (it?.notes === 'original' || it?.isOriginal) { alert("No puedes modificar productos que ya están en proceso. Para pedir más, agrégalos como productos nuevos."); return; }
+    if (it?.isServed && currentUser?.role !== 'admin') { alert("Este producto ya fue servido y no puede modificarse."); return; }
     if (qty <= 0) { handleRemoveItem(id); return; }
     setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: qty } : i));
     setTriggerCartShake(true); setTimeout(() => setTriggerCartShake(false), 500);
   };
 
   const handleRemoveItem = (id: string) => {
-    if (cart.find(i => i.id === id)?.isServed && currentUser?.role !== 'admin') setPendingRemoveItemId(id);
+    const it = cart.find(i => i.id === id);
+    if (it?.notes === 'original' || it?.isOriginal) { alert("No puedes eliminar productos que ya están en proceso."); return; }
+    if (it?.isServed && currentUser?.role !== 'admin') setPendingRemoveItemId(id);
     else setCart(prev => prev.filter(i => i.id !== id));
   };
 
@@ -482,12 +485,12 @@ function App() {
     if (pendingRemoveItemId) { if (reason) setRemovalReasons(p => ({ ...p, [pendingRemoveItemId]: reason })); setCart(p => p.filter(i => i.id !== pendingRemoveItemId)); setPendingRemoveItemId(null); }
   };
 
-  const handleAddItem = (item: MenuItem, mods: SelectedModifier[], qty: number) => {
+  const handleAddItem = (item: MenuItem, mods: SelectedModifier[], qty: number, notes?: string) => {
     if (!(item.modifierGroupTitles?.length)) {
-      const ex = cart.find(c => c.name === item.name && !c.selectedModifiers.length && !c.isServed);
+      const ex = cart.find(c => c.name === item.name && !c.selectedModifiers.length && !c.isServed && c.notes !== 'original' && !c.isOriginal);
       if (ex) { handleUpdateQuantity(ex.id, ex.quantity + qty); return; }
     }
-    setCart(p => [...p, { id: Math.random().toString(36).substr(2, 9), name: item.name, price: item.price, quantity: qty, selectedModifiers: mods, kitchenStations: item.kitchenStations }]);
+    setCart(p => [...p, { id: Math.random().toString(36).substr(2, 9), name: item.name, price: item.price, quantity: qty, selectedModifiers: mods, kitchenStations: item.kitchenStations, notes }]);
     setTriggerCartShake(true); setTimeout(() => setTriggerCartShake(false), 500);
   };
 
@@ -525,7 +528,20 @@ function App() {
 
     let hasUnavailableItems = false;
     const validatedCart = cart.map(item => {
-      const masterItem = productMaster.get(item.name);
+      // Intento de búsqueda inteligente para Pizzas
+      let masterItem = productMaster.get(item.name);
+
+      if (!masterItem && item.pizzaConfig) {
+        // Si no lo encuentra por nombre compuesto, buscamos por el nombre base de la pizza
+        const baseName = item.pizzaConfig.isSpecialPizza ? item.pizzaConfig.specialPizzaName : "Pizza";
+        masterItem = productMaster.get(baseName || "");
+
+        // Si aún así no lo encuentra (ej: el usuario llamó al item "Pizzas" en lugar de "Pizza")
+        // podemos intentar buscar por cualquier item que tenga isPizza: true
+        if (!masterItem) {
+          masterItem = Array.from(productMaster.values()).find(m => m.isPizza && !m.isSpecialPizza);
+        }
+      }
 
       // 1. Validar Existencia y Disponibilidad
       if (!masterItem || !masterItem.available) {
@@ -548,9 +564,12 @@ function App() {
       });
 
       // 3. Validar Precio del Item Principal y Estación
+      // Para pizzas especiales el precio base es el del master, para personalizadas se mantiene el calculado
+      const finalPrice = item.pizzaConfig && !item.pizzaConfig.isSpecialPizza ? item.price : masterItem.price;
+
       return {
         ...item,
-        price: masterItem.price,
+        price: finalPrice,
         selectedModifiers: validatedModifiers,
         kitchenStations: masterItem.kitchenStations
       };
@@ -563,8 +582,9 @@ function App() {
 
     const tot = validatedCart.reduce((acc, item) => {
       const itemBasePrice = item.price;
-      const modsPrice = item.selectedModifiers.reduce((sum, m) => sum + m.option.price, 0);
-      return acc + ((itemBasePrice + modsPrice) * item.quantity);
+      let mPrice = 0;
+      item.selectedModifiers.forEach(m => { mPrice += m.option.price; });
+      return acc + ((itemBasePrice + mPrice) * item.quantity);
     }, 0);
     if (isPaid) setSettings(p => ({ ...p, lifetimeRevenueUSD: (p.lifetimeRevenueUSD || 0) + tot }));
 
@@ -580,6 +600,8 @@ function App() {
       order: validatedCart,
       type: 'sale',
       customerName: customerDetails.name,
+      customerPhone: customerDetails.phone,
+      instructions: customerDetails.instructions,
       createdAt: ex?.createdAt || new Date().toISOString(),
       notes: isPaid ? customerDetails.paymentMethod : 'PENDIENTE',
       auditNotes: ex?.auditNotes || []
@@ -603,11 +625,34 @@ function App() {
 
   const handleStartNewOrder = () => { setCart([]); setEditingReportId(null); setCustomerDetails({ name: '', phone: '', paymentMethod: 'Efectivo', instructions: '' }); setCurrentView('menu'); };
   const executeSendToWhatsapp = (unpaid: boolean = false) => {
+    const isEdit = !!editingReportId;
+    const newItems = cart.filter(i => !i.isOriginal);
+
+    // Si es edición y no está pagado (actualización), enviamos solo lo nuevo para no confundir a cocina
+    const shouldSendPartial = isEdit && unpaid && newItems.length > 0;
+    const itemsToSend = shouldSendPartial ? newItems : cart;
+
     const tot = cart.reduce((a, i) => a + ((i.price + i.selectedModifiers.reduce((s, m) => s + m.option.price, 0)) * i.quantity), 0);
-    let msg = unpaid ? `*⚠️ PENDIENTE*\n\n` : `*✅ COBRADO*\n\n`;
+    const partialTotal = itemsToSend.reduce((a, i) => a + ((i.price + i.selectedModifiers.reduce((s, m) => s + m.option.price, 0)) * i.quantity), 0);
+
+    let msg = shouldSendPartial ? `*📝 ADICIONAL / EXTRA*\n\n` : (unpaid ? `*⚠️ PENDIENTE*\n\n` : `*✅ COBRADO*\n\n`);
     msg += `*🤵 Mesero:* ${currentUser?.name}\n*📍 Ref:* ${customerDetails.name}\n\n*🛒 DETALLE:*\n`;
-    cart.forEach(i => { msg += `▪️ *${i.quantity}x ${i.name}*\n`; i.selectedModifiers.forEach(m => msg += `  _${m.groupTitle}: ${m.option.name}_\n`); });
-    msg += `\n*💰 TOTAL: $${tot.toFixed(2)}*\n*💳 Estado:* ${unpaid ? 'PENDIENTE' : customerDetails.paymentMethod}`;
+
+    itemsToSend.forEach(i => {
+      msg += `▪️ *${i.quantity}x ${i.name}*${!shouldSendPartial && i.isOriginal ? ' _(Previo)_' : ''}\n`;
+      i.selectedModifiers.forEach(m => msg += `  _${m.groupTitle}: ${m.option.name}_\n`);
+    });
+
+    if (shouldSendPartial) {
+      const prevDebt = tot - partialTotal;
+      if (prevDebt > 0) msg += `\n*💰 DEUDA PREVIA: $${prevDebt.toFixed(2)}*`;
+      msg += `\n*➕ ADICIONAL: $${partialTotal.toFixed(2)}*`;
+      msg += `\n*💲 TOTAL FINAL: $${tot.toFixed(2)}*`;
+    } else {
+      msg += `\n*💰 TOTAL: $${tot.toFixed(2)}*`;
+    }
+
+    msg += `\n*💳 Estado:* ${unpaid ? 'PENDIENTE' : customerDetails.paymentMethod}`;
     if (settings.isWhatsAppEnabled) window.open(`https://wa.me/${settings.targetNumber}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
@@ -666,10 +711,10 @@ function App() {
                   {(() => {
                     switch (currentView) {
                       case 'menu': return <MenuScreen menu={menu} cart={cart} onAddItem={handleAddItem} onUpdateQuantity={handleUpdateQuantity} onRemoveItem={handleRemoveItem} onClearCart={handleClearCart} cartItemCount={cart.reduce((a, i) => a + i.quantity, 0)} onOpenModifierModal={setModifierModalItem} onOpenPizzaBuilder={setPizzaBuilderItem} onGoToCart={() => setCurrentView('cart')} businessName={businessName} businessLogo={businessLogo} triggerShake={triggerCartShake} showInstallButton={showInstallBtn} onInstallApp={handleInstallClick} activeRate={activeRate} isEditing={!!editingReportId} theme={theme} />;
-                      case 'cart': return <CartScreen cart={cart} onUpdateQuantity={handleUpdateQuantity} onRemoveItem={handleRemoveItem} onClearCart={handleClearCart} onBackToMenu={() => setCurrentView('menu')} onGoToCheckout={() => setCurrentView('checkout')} onEditItem={(id) => { const item = cart.find(i => i.id === id); if (item) { setEditingCartItemId(id); for (const cat of menu) { const orig = cat.items.find(i => i.name === item.name); if (orig) { setModifierModalItem(orig); break; } } } }} activeRate={activeRate} isEditing={!!editingReportId} isAdmin={currentUser?.role === 'admin'} />;
-                      case 'checkout': return <CheckoutScreen cart={cart} customerDetails={customerDetails} paymentMethods={['Efectivo', 'Pago Móvil', 'Zelle', 'Divisas']} onUpdateDetails={setCustomerDetails} onBack={() => setCurrentView('cart')} onSubmitOrder={() => setConfirmOrderModalOpen(true)} onEditUserDetails={handleLogout} onClearCart={handleClearCart} activeRate={activeRate} isEditing={!!editingReportId} />;
-                      case 'reports': return <ReportsScreen reports={reports} dayClosures={dayClosures} onGoToTables={() => setCurrentView('menu')} onDeleteReports={(ids) => { setReports(p => p.filter(r => !ids.includes(r.id))); return true; }} settings={settings} onStartNewDay={handleStartNewDay} currentWaiter={currentUser?.name || ''} onOpenSalesHistory={() => setIsSalesHistoryModalOpen(true)} onReprintSaleRecord={handleReprintSaleRecord} isPrinterConnected={isPrinterConnected} onEditPendingReport={handleEditPendingReport} onVoidReport={handleVoidReport} isAdmin={currentUser?.role === 'admin'} forceRenderCount={forceRenderCount} />;
-                      case 'dashboard': return <AdminDashboard reports={reports} settings={settings} onGoToView={(v) => setCurrentView(v)} onEditOrder={handleEditPendingReport} onVoidOrder={handleVoidReport} onReprintOrder={handlePrintOrder} isPrinterConnected={isPrinterConnected} forceRenderCount={forceRenderCount} />;
+                      case 'cart': return <CartScreen cart={cart} onUpdateQuantity={handleUpdateQuantity} onRemoveItem={handleRemoveItem} onClearCart={handleClearCart} onBackToMenu={() => setCurrentView('menu')} onGoToCheckout={() => setCurrentView('checkout')} onEditItem={(id) => { const item = cart.find(i => i.id === id); if (item) { setEditingCartItemId(id); for (const cat of menu) { const orig = cat.items.find(i => i.name === item.name); if (orig) { setModifierModalItem(orig); break; } } } }} activeRate={activeRate} isEditing={!!editingReportId} isAdmin={currentUser?.role === 'admin'} theme={theme} />;
+                      case 'checkout': return <CheckoutScreen cart={cart} customerDetails={customerDetails} paymentMethods={['Efectivo', 'Pago Móvil', 'Zelle', 'Divisas']} onUpdateDetails={setCustomerDetails} onBack={() => setCurrentView('cart')} onSubmitOrder={() => setConfirmOrderModalOpen(true)} onEditUserDetails={handleLogout} onClearCart={handleClearCart} activeRate={activeRate} isEditing={!!editingReportId} theme={theme} settings={settings} />;
+                      case 'reports': return <ReportsScreen reports={reports} dayClosures={dayClosures} onGoToTables={() => setCurrentView('menu')} onDeleteReports={(ids) => { setReports(p => p.filter(r => !ids.includes(r.id))); return true; }} settings={settings} onStartNewDay={handleStartNewDay} currentWaiter={currentUser?.name || ''} onOpenSalesHistory={() => setIsSalesHistoryModalOpen(true)} onReprintSaleRecord={handleReprintSaleRecord} isPrinterConnected={isPrinterConnected} onEditPendingReport={handleEditPendingReport} onVoidReport={handleVoidReport} isAdmin={currentUser?.role === 'admin'} forceRenderCount={forceRenderCount} theme={theme} />;
+                      case 'dashboard': return <AdminDashboard reports={reports} settings={settings} onGoToView={(v) => setCurrentView(v)} onEditOrder={handleEditPendingReport} onVoidOrder={handleVoidReport} onReprintOrder={handlePrintOrder} isPrinterConnected={isPrinterConnected} forceRenderCount={forceRenderCount} theme={theme} />;
                       case 'settings': return <SettingsScreen
                         settings={settings}
                         onSaveSettings={(s) => { setSettings(s); syncSettings(s as AppSettings); }}
@@ -703,7 +748,7 @@ function App() {
                         onResetApp={() => { if (window.confirm("¿Cerrar negocio?")) { setSettings(p => ({ ...p, storeId: 'NEW_STORE' })); handleLogout(); } }}
                       />;
                       case 'kitchen': return <KitchenScreen reports={reports} settings={settings} currentUser={currentUser} onUpdateItemStatus={async (rid, iid, sid, status) => { const updated = reports.map(r => r.id === rid ? { ...r, order: r.order.map((i: any) => i.id === iid ? { ...i, kitchenStatus: { ...(i.kitchenStatus || {}), [sid]: status } } : i) } : r); setReports(updated); const rep = updated.find(r => r.id === rid); if (rep) await safeSyncSale(rep); }} onCloseOrder={async (rid) => { if (window.confirm("¿Cerrar comanda?")) { const target = reports.find(r => r.id === rid); if (target) { const up = { ...target, closed: true }; setReports(reports.map(r => r.id === rid ? up : r)); await safeSyncSale(up); } } }} onLogout={handleLogout} onManualSync={handleManualSync} syncStatus={syncStatus} lastSyncTime={lastSyncTime} forceRenderCount={forceRenderCount} />;
-                      case 'success': return <SuccessScreen cart={lastSoldRecord?.cart || []} customerDetails={lastSoldRecord?.details || customerDetails} onStartNewOrder={handleStartNewOrder} onReprint={() => handlePrintOrder(undefined, true)} isPrinterConnected={isPrinterConnected} activeRate={activeRate} />;
+                      case 'success': return <SuccessScreen cart={lastSoldRecord?.cart || []} customerDetails={lastSoldRecord?.details || customerDetails} onStartNewOrder={handleStartNewOrder} onReprint={() => handlePrintOrder(undefined, true)} isPrinterConnected={isPrinterConnected} activeRate={activeRate} theme={theme} settings={settings} />;
                       default: return null;
                     }
                   })()}
@@ -748,23 +793,23 @@ function App() {
                   </>
                 ) : (
                   <>
-                    <button onClick={() => setCurrentView('menu')} className={`flex flex-col items-center gap-1 ${currentView === 'menu' ? 'text-brand' : 'text-gray-400'}`}>
+                    <button onClick={() => setCurrentView('menu')} className={`flex flex-col items-center gap-1 ${currentView === 'menu' ? 'text-[#f2a60d]' : 'text-gray-400'}`}>
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
                       <span className="text-[8px] font-black uppercase">Vender</span>
                     </button>
-                    <button onClick={() => setCurrentView('reports')} className={`flex flex-col items-center gap-1 relative ${currentView === 'reports' ? 'text-brand' : 'text-gray-400'}`}>
+                    <button onClick={() => setCurrentView('reports')} className={`flex flex-col items-center gap-1 relative ${currentView === 'reports' ? 'text-[#a855f7]' : 'text-gray-400'}`}>
                       {hasReadyPlates && <span className="absolute -top-1 right-0 w-2 h-2 bg-green-500 rounded-full border border-white animate-bounce"></span>}
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                       <span className="text-[8px] font-black uppercase">Reportes</span>
                     </button>
                     {currentUser.role === 'admin' && (
-                      <button onClick={() => setCurrentView('dashboard')} className={`flex flex-col items-center gap-1 ${currentView === 'dashboard' ? 'text-brand' : 'text-gray-400'}`}>
+                      <button onClick={() => setCurrentView('dashboard')} className={`flex flex-col items-center gap-1 ${currentView === 'dashboard' ? 'text-[#f2a60d]' : 'text-gray-400'}`}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg>
                         <span className="text-[8px] font-black uppercase">Dash</span>
                       </button>
                     )}
                     {currentUser.role === 'admin' && (
-                      <button onClick={() => setCurrentView('settings')} className={`flex flex-col items-center gap-1 ${currentView === 'settings' ? 'text-brand' : 'text-gray-400'}`}>
+                      <button onClick={() => setCurrentView('settings')} className={`flex flex-col items-center gap-1 ${currentView === 'settings' ? 'text-[#f2a60d]' : 'text-gray-400'}`}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                         <span className="text-[8px] font-black uppercase">Tools</span>
                       </button>
@@ -775,7 +820,7 @@ function App() {
                         <span className="text-[8px] font-black uppercase">Master</span>
                       </button>
                     )}
-                    <button onClick={handleManualSync} className={`flex flex-col items-center gap-1 relative ${isSyncing ? 'text-brand' : 'text-gray-400'}`}>
+                    <button onClick={handleManualSync} className={`flex flex-col items-center gap-1 relative ${isSyncing ? 'text-[#f2a60d]' : 'text-gray-400'}`}>
                       <span className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-white ${syncStatus === 'online' ? 'bg-green-500' : 'bg-amber-500 animate-pulse'}`}></span>
                       <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${isSyncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                       <span className="text-[8px] font-black uppercase">Sync</span>
@@ -800,7 +845,7 @@ function App() {
           />
         </div>
       )}
-      {modifierModalItem && <ProductModifierModal item={modifierModalItem} initialCartItem={editingCartItemId ? cart.find(i => i.id === editingCartItemId) : null} allModifierGroups={modifierGroups} onClose={() => { setModifierModalItem(null); setEditingCartItemId(null); }} onSubmit={(item, mods, qty) => { if (editingCartItemId) { setCart(prev => prev.map(i => i.id === editingCartItemId ? { ...i, selectedModifiers: mods, quantity: qty } : i)); setEditingCartItemId(null); } else { handleAddItem(item, mods, qty); } setModifierModalItem(null); }} activeRate={activeRate} />}
+      {modifierModalItem && <ProductModifierModal item={modifierModalItem} initialCartItem={editingCartItemId ? cart.find(i => i.id === editingCartItemId) : null} allModifierGroups={modifierGroups} onClose={() => { setModifierModalItem(null); setEditingCartItemId(null); }} onSubmit={(itemWithNotes, mods, qty) => { if (editingCartItemId) { setCart(prev => prev.map(i => i.id === editingCartItemId ? { ...i, selectedModifiers: mods, quantity: qty, notes: (itemWithNotes as any).notes } : i)); setEditingCartItemId(null); } else { handleAddItem(itemWithNotes, mods, qty, (itemWithNotes as any).notes); } setModifierModalItem(null); }} activeRate={activeRate} />}
       {pizzaBuilderItem && <PizzaBuilderModal item={pizzaBuilderItem} onClose={() => setPizzaBuilderItem(null)} onSubmit={handleAddPizzaToCart} activeRate={activeRate} isSpecialPizza={pizzaBuilderItem.isSpecialPizza} defaultIngredients={pizzaBuilderItem.defaultIngredients} pizzaIngredients={pizzaIngredients} pizzaBasePrices={pizzaBasePrices} allModifierGroups={modifierGroups} />}
       {isConfirmOrderModalOpen && <ConfirmOrderModal isOpen={isConfirmOrderModalOpen} onClose={() => setConfirmOrderModalOpen(false)} isPrinterConnected={isPrinterConnected} isEdit={!!editingReportId} onConfirmPrintAndSend={async () => { if (isPrinterConnected) await handlePrintOrder(); executeSendToWhatsapp(); finalizeOrder(true); setConfirmOrderModalOpen(false); }} onConfirmPrintOnly={async () => { if (isPrinterConnected) await handlePrintOrder(); finalizeOrder(true); setConfirmOrderModalOpen(false); }} onConfirmSendOnly={() => { executeSendToWhatsapp(); finalizeOrder(true); setConfirmOrderModalOpen(false); }} onConfirmSendUnpaid={async () => { if (isPrinterConnected) await handlePrintOrder("POR COBRAR"); executeSendToWhatsapp(true); finalizeOrder(false); setConfirmOrderModalOpen(false); }} userRole={currentUser?.role} waitersCanCharge={settings.waitersCanCharge} />}
       {isSalesHistoryModalOpen && <SalesHistoryModal reports={reports} onClose={() => setIsSalesHistoryModalOpen(false)} />}

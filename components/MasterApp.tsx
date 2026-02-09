@@ -70,6 +70,57 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
     const [newOwnerName, setNewOwnerName] = useState('');
     const [newEmail, setNewEmail] = useState('');
     const [isCreating, setIsCreating] = useState(false);
+    const [isEditingDetails, setIsEditingDetails] = useState(false);
+    const [editForm, setEditForm] = useState({ name: '', ownerName: '', ownerPhone: '', email: '' });
+
+    const handleUpdateStoreDetails = async () => {
+        if (!selectedStore) return;
+
+        try {
+            const { error: storeError } = await supabase
+                .from('stores')
+                .update({
+                    name: editForm.name,
+                    owner_name: editForm.ownerName,
+                    owner_phone: editForm.ownerPhone,
+                    owner_email: editForm.email
+                })
+                .eq('id', selectedStore.id);
+
+            if (storeError) throw storeError;
+
+            const { error: settingsError } = await supabase
+                .from('settings')
+                .update({
+                    business_name: editForm.name,
+                    target_number: editForm.ownerPhone
+                })
+                .eq('store_id', selectedStore.id);
+
+            if (settingsError) throw settingsError;
+
+            setStores(prev => prev.map(s => s.id === selectedStore.id ? {
+                ...s,
+                name: editForm.name,
+                ownerName: editForm.ownerName,
+                ownerPhone: editForm.ownerPhone,
+                email: editForm.email
+            } : s));
+
+            setSelectedStore(prev => prev ? {
+                ...prev,
+                name: editForm.name,
+                ownerName: editForm.ownerName,
+                ownerPhone: editForm.ownerPhone,
+                email: editForm.email
+            } : null);
+
+            setIsEditingDetails(false);
+            alert("✅ Datos de la nave actualizados y sincronizados en todos los sistemas.");
+        } catch (err: any) {
+            alert("❌ Error al actualizar datos: " + err.message);
+        }
+    };
 
 
     const [plans, setPlans] = useState<Plan[]>(() => {
@@ -520,6 +571,17 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
                                     />
                                 </div>
                                 <div>
+                                    <label className="block text-[10px] font-black text-[#FFD700] uppercase mb-3 tracking-widest">WhatsApp / Teléfono</label>
+                                    <input
+                                        required
+                                        type="tel"
+                                        value={newStorePhone}
+                                        onChange={e => setNewStorePhone(e.target.value)}
+                                        className="w-full bg-white/5 border border-white/10 py-5 px-6 rounded-2xl text-white font-bold text-lg focus:outline-none focus:border-red-600 transition-all"
+                                        placeholder="EJ: 584120000000"
+                                    />
+                                </div>
+                                <div>
                                     <label className="block text-[10px] font-black text-[#FFD700] uppercase mb-3 tracking-widest">Email del Negocio</label>
                                     <input
                                         type="email"
@@ -600,9 +662,11 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
                                 </div>
 
                                 <div className="flex gap-5 items-start mb-8">
-                                    <div className="w-16 h-16 bg-[#111] rounded-[1.5rem] flex flex-col items-center justify-center border-2 border-white/5 shadow-inner">
-                                        <span className="font-black text-2xl text-white italic leading-none">{store.name.charAt(0)}</span>
-                                        <span className="text-[6px] font-black text-gray-600 mt-1 uppercase">ID: {store.id}</span>
+                                    <div className="w-16 h-16 bg-[#111] rounded-[1.5rem] flex flex-col items-center justify-center border-2 border-white/5 shadow-inner relative overflow-visible group-hover:scale-105 transition-transform">
+                                        <span className="font-black text-2xl text-white italic leading-none mb-1">{store.name.charAt(0)}</span>
+                                        <div className="absolute -bottom-3 px-2 py-0.5 bg-[#FFD700] text-black font-black text-[8px] rounded-md shadow-lg tracking-widest uppercase whitespace-nowrap z-10 border-2 border-black">
+                                            {store.id}
+                                        </div>
                                     </div>
                                     <div className="pt-1 flex-1">
                                         <div className="flex items-center gap-2 mb-1">
@@ -648,7 +712,7 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
                                 </div>
 
                                 <div className="flex gap-2">
-                                    <button onClick={() => selectedStore && onSelectStore && onSelectStore(selectedStore.id)} className="flex-grow py-4 bg-white/5 border border-white/10 rounded-2xl font-black uppercase text-[9px] tracking-[0.2em] hover:bg-[#FF0000] hover:text-white transition-all flex items-center justify-center gap-2">
+                                    <button onClick={() => onSelectStore && onSelectStore(store.id)} className="flex-grow py-4 bg-white/5 border border-white/10 rounded-2xl font-black uppercase text-[9px] tracking-[0.2em] hover:bg-[#FF0000] hover:text-white transition-all flex items-center justify-center gap-2">
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
                                         Controlar Nave
                                     </button>
@@ -685,23 +749,80 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
 
                         <div className="flex flex-col md:flex-row gap-8 mb-10">
                             <div className="w-32 h-32 bg-[#FF0000]/10 border-4 border-[#FF0000]/20 rounded-[2.5rem] flex items-center justify-center text-4xl font-black italic shadow-2xl shrink-0">
-                                {selectedStore.name.charAt(0)}
+                                {isEditingDetails ? editForm.name.charAt(0) : selectedStore.name.charAt(0)}
                             </div>
                             <div className="flex-grow">
-                                <p className="text-[10px] font-black text-[#FFD700] uppercase tracking-widest mb-1">Expediente de Nave Inteligente</p>
-                                <h2 className="text-4xl font-black uppercase italic tracking-tighter mb-4">{selectedStore.name}</h2>
+                                <div className="flex justify-between items-start">
+                                    <p className="text-[10px] font-black text-[#FFD700] uppercase tracking-widest mb-1">Expediente de Nave Inteligente</p>
+                                    {!isEditingDetails && (
+                                        <button
+                                            onClick={() => {
+                                                setEditForm({
+                                                    name: selectedStore.name,
+                                                    ownerName: selectedStore.ownerName || '',
+                                                    ownerPhone: selectedStore.ownerPhone,
+                                                    email: selectedStore.email || ''
+                                                });
+                                                setIsEditingDetails(true);
+                                            }}
+                                            className="text-[9px] font-black text-gray-500 uppercase hover:text-white flex items-center gap-1 bg-white/5 px-2 py-1 rounded-lg"
+                                        >
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                            Editar Datos
+                                        </button>
+                                    )}
+                                </div>
+
+                                {isEditingDetails ? (
+                                    <div className="space-y-4 mb-4">
+                                        <input
+                                            value={editForm.name}
+                                            onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                                            className="text-3xl font-black uppercase italic tracking-tighter bg-white/10 border border-white/20 rounded-xl p-2 w-full focus:border-[#FF0000] outline-none text-white"
+                                            placeholder="NOMBRE DEL NEGOCIO"
+                                        />
+                                        <div className="flex gap-2">
+                                            <button onClick={handleUpdateStoreDetails} className="px-4 py-2 bg-green-600 text-white rounded-xl font-black uppercase text-[10px] hover:bg-green-500">Guardar Cambios</button>
+                                            <button onClick={() => setIsEditingDetails(false)} className="px-4 py-2 bg-white/10 text-gray-400 rounded-xl font-black uppercase text-[10px] hover:bg-white/20">Cancelar</button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <h2 className="text-4xl font-black uppercase italic tracking-tighter mb-4">{selectedStore.name}</h2>
+                                )}
+
                                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                                     <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
                                         <span className="text-[7px] text-gray-500 font-black block uppercase mb-1">Dueño / Responsable</span>
-                                        <span className="text-sm font-black text-white">{selectedStore.ownerName || 'PENDIENTE'}</span>
+                                        {isEditingDetails ? (
+                                            <input
+                                                value={editForm.ownerName} onChange={e => setEditForm(prev => ({ ...prev, ownerName: e.target.value }))}
+                                                className="w-full bg-black/20 text-white font-bold text-sm border-none outline-none focus:ring-1 focus:ring-[#FF0000] rounded p-1"
+                                            />
+                                        ) : (
+                                            <span className="text-sm font-black text-white">{selectedStore.ownerName || 'PENDIENTE'}</span>
+                                        )}
                                     </div>
                                     <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
                                         <span className="text-[7px] text-gray-500 font-black block uppercase mb-1">WhatsApp Sede</span>
-                                        <span className="text-sm font-black text-white">{selectedStore.ownerPhone || 'N/A'}</span>
+                                        {isEditingDetails ? (
+                                            <input
+                                                value={editForm.ownerPhone} onChange={e => setEditForm(prev => ({ ...prev, ownerPhone: e.target.value }))}
+                                                className="w-full bg-black/20 text-white font-bold text-sm border-none outline-none focus:ring-1 focus:ring-[#FF0000] rounded p-1"
+                                            />
+                                        ) : (
+                                            <span className="text-sm font-black text-white">{selectedStore.ownerPhone || 'N/A'}</span>
+                                        )}
                                     </div>
                                     <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
                                         <span className="text-[7px] text-gray-500 font-black block uppercase mb-1">Email Contractual</span>
-                                        <span className="text-sm font-black text-white break-all">{selectedStore.email || 'N/A'}</span>
+                                        {isEditingDetails ? (
+                                            <input
+                                                value={editForm.email} onChange={e => setEditForm(prev => ({ ...prev, email: e.target.value }))}
+                                                className="w-full bg-black/20 text-white font-bold text-sm border-none outline-none focus:ring-1 focus:ring-[#FF0000] rounded p-1"
+                                            />
+                                        ) : (
+                                            <span className="text-sm font-black text-white break-all">{selectedStore.email || 'N/A'}</span>
+                                        )}
                                     </div>
                                     <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
                                         <span className="text-[7px] text-gray-500 font-black block uppercase mb-1">ID Único de Sistema</span>

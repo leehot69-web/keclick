@@ -13,11 +13,14 @@ interface CheckoutScreenProps {
     onClearCart?: () => void;
     activeRate: number;
     isEditing?: boolean;
+    settings?: any;
 }
 
-const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
-    cart, customerDetails, paymentMethods, onUpdateDetails, onBack, onSubmitOrder, onEditUserDetails, onClearCart, activeRate, isEditing = false
+const CheckoutScreen: React.FC<CheckoutScreenProps & { theme?: string }> = ({
+    cart, customerDetails, paymentMethods, onUpdateDetails, onBack, onSubmitOrder, onEditUserDetails, onClearCart, activeRate, isEditing = false, theme = 'keclick', settings
 }) => {
+    const isBrutalist = theme === 'brutalist';
+    const isMidnight = theme === 'midnight';
 
     const cartTotal = cart.reduce((acc, item) => {
         const modTotal = item.selectedModifiers.reduce((s, m) => s + m.option.price, 0);
@@ -33,95 +36,132 @@ const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
     const isFormComplete = customerDetails.name.trim() !== '';
 
     return (
-        <div className="flex flex-col h-full bg-gray-50 overflow-hidden">
-            <header className="p-4 bg-white shadow-sm flex-shrink-0 z-10 flex items-center justify-between">
+        <div className={`flex flex-col h-full overflow-hidden ${isBrutalist ? 'bg-[#121212]' : (isMidnight ? 'bg-transparent' : 'bg-black')}`}>
+            <header className={`p-4 flex-shrink-0 z-20 flex items-center justify-between border-b ${isBrutalist ? 'bg-white/[0.03] backdrop-blur-xl border-white/5' : (isMidnight ? 'bg-white/5 backdrop-blur-xl border-white/10' : 'bg-[#111] border-white/10')}`}>
                 <div className="flex items-center">
-                    <button onClick={onBack} className="p-2 rounded-full hover:bg-gray-100 mr-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
+                    <button onClick={onBack} className="p-2 rounded-full active:bg-white/10 transition-all mr-2">
+                        <span className="material-symbols-outlined text-white">arrow_back</span>
                     </button>
                     <div className="flex flex-col">
-                        <h1 className="text-xl font-bold text-gray-800 leading-none">{isEditing ? 'Cobrar Cuenta' : 'Finalizar Pedido'}</h1>
-                        {isEditing && <span className="text-[10px] font-black text-amber-500 uppercase mt-1">Cerrando cuenta pendiente</span>}
+                        <h1 className={`text-xl font-bold text-white leading-none ${isBrutalist ? 'tracking-tight' : ''}`}>{isEditing ? 'Cobrar Cuenta' : 'Finalizar Pedido'}</h1>
+                        {isEditing && <span className="text-[9px] font-bold text-amber-500 uppercase mt-1 tracking-widest">Cerrando cuenta pendiente</span>}
                     </div>
                 </div>
 
                 {isEditing && onClearCart && (
                     <button
                         onClick={onClearCart}
-                        className="bg-amber-50 text-amber-600 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border border-amber-200 active:scale-95 transition-all"
+                        className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest border transition-all active:scale-95 ${isBrutalist ? 'bg-white/5 border-white/10 text-white/60' : 'bg-red-500/10 text-red-500 border-red-500/20'}`}
                     >
                         Abandonar
                     </button>
                 )}
             </header>
 
-            <div className="flex-grow overflow-y-auto p-4 space-y-6">
+            <div className="flex-grow overflow-y-auto p-5 space-y-6 relative scrollbar-hide">
+                {isBrutalist && (
+                    <>
+                        <div className="fixed top-1/4 right-0 w-64 h-64 bg-crimson/[0.05] blur-[120px] rounded-full pointer-events-none"></div>
+                        <div className="fixed bottom-1/4 left-0 w-64 h-64 bg-amber/[0.05] blur-[120px] rounded-full pointer-events-none"></div>
+                    </>
+                )}
+
+                {/* Resumen de Pedido */}
+                <div className={`p-6 rounded-[2rem] border relative overflow-hidden ${isBrutalist ? 'bg-white/[0.03] backdrop-blur-xl border-white/[0.08] shadow-2xl' : 'bg-white/5 border-white/5'}`}>
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-white/30 font-bold uppercase text-[9px] tracking-[0.2em]">Resumen del Pedido</h2>
+                        <span className={`text-[8px] font-bold px-3 py-1 rounded-full uppercase tracking-widest ${isBrutalist ? 'bg-white/10 text-white border border-white/10' : 'bg-white/5 text-zinc-400'}`}>
+                            {cart.reduce((a, c) => a + c.quantity, 0)} Items
+                        </span>
+                    </div>
+                    <div className="space-y-5">
+                        {cart.map(item => {
+                            const unitPrice = item.price + item.selectedModifiers.reduce((s, m) => s + m.option.price, 0);
+                            return (
+                                <div key={item.id} className="flex flex-col gap-1 border-b border-white/5 pb-4 last:border-0 last:pb-0">
+                                    <div className="flex justify-between items-center">
+                                        <div className="flex items-center">
+                                            <span className={`text-base mr-3 ${isBrutalist ? 'text-[--accent-color] font-light' : 'text-[#FFD700] font-black'}`}>{item.quantity}x</span>
+                                            <span className={`text-sm text-white ${isBrutalist ? 'font-medium tracking-tight' : 'font-bold'}`}>{item.name}</span>
+                                        </div>
+                                        <span className={`text-base text-white ${isBrutalist ? 'font-light tracking-tighter' : 'font-black'}`}>
+                                            ${(unitPrice * item.quantity).toFixed(2)}
+                                        </span>
+                                    </div>
+                                    {item.notes && (
+                                        <div className="flex items-start gap-2 ml-9">
+                                            <span className="material-symbols-outlined text-[14px] text-white/20">edit_note</span>
+                                            <span className="text-[10px] text-white/40 italic">"{item.notes}"</span>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
 
                 {/* Datos del Cliente */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-5">
-                    <div className="flex items-center">
-                        <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center text-[var(--brand-color)]">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                            </div>
-                            Datos de la Mesa / Cliente
-                        </h2>
+                <div className={`p-6 rounded-[2rem] border relative overflow-hidden ${isBrutalist ? 'bg-white/[0.03] backdrop-blur-xl border-white/[0.08] shadow-2xl' : 'bg-white/5 border-white/5'}`}>
+                    <div className="flex items-center gap-4 mb-6">
+                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${isBrutalist ? 'bg-white/5 border border-white/10 text-[--brand-color]' : 'bg-red-500/10 text-red-500'}`}>
+                            <span className="material-symbols-outlined text-xl">person</span>
+                        </div>
+                        <h2 className={`text-lg text-white ${isBrutalist ? 'font-light tracking-tight' : 'font-black uppercase'}`}>Identificación</h2>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Nombre o Referencia <span className="text-red-500">*</span></label>
-                        <input
-                            type="text"
-                            value={customerDetails.name}
-                            onChange={(e) => handleChange('name', e.target.value)}
-                            className="w-full p-3 bg-white border border-gray-200 text-black rounded-lg focus:ring-2 focus:ring-[var(--brand-color)] focus:border-[var(--brand-color)] outline-none transition-all"
-                            placeholder="Ej: Mesa 5 / Juan"
-                        />
-                    </div>
-
-                    {!isEditing && (
+                    <div className="space-y-5">
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">Teléfono (Opcional)</label>
+                            <label className="block text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] mb-2 ml-1">Nombre o Referencia <span className="text-[--brand-color]">*</span></label>
                             <input
-                                type="tel"
-                                value={customerDetails.phone || ''}
-                                onChange={(e) => handleChange('phone', e.target.value)}
-                                className="w-full p-3 bg-white border border-gray-200 text-black rounded-lg focus:ring-2 focus:ring-[var(--brand-color)] focus:border-[var(--brand-color)] outline-none transition-all"
-                                placeholder="Ej: 0412 1234567"
+                                type="text"
+                                value={customerDetails.name}
+                                onChange={(e) => handleChange('name', e.target.value)}
+                                className={`w-full p-4 rounded-2xl outline-none transition-all placeholder:text-white/10 text-sm ${isBrutalist ? 'bg-black/40 border border-white/10 text-white focus:border-[--brand-color]/50 focus:bg-black/60 shadow-inner' : 'bg-white/5 border border-white/5 text-white'}`}
+                                placeholder="Ej: Mesa 5 / Juan"
                             />
                         </div>
-                    )}
 
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Nota del Pedido</label>
-                        <input
-                            type="text"
-                            value={customerDetails.instructions || ''}
-                            onChange={(e) => handleChange('instructions', e.target.value)}
-                            className="w-full p-3 bg-white border border-gray-200 text-black rounded-lg focus:ring-2 focus:ring-[var(--brand-color)] focus:border-[var(--brand-color)] outline-none transition-all"
-                            placeholder="Ej: Sin pepinillos, cuenta dividida..."
-                        />
+                        {!isEditing && settings?.isWhatsAppEnabled && (
+                            <div>
+                                <label className="block text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] mb-2 ml-1">Teléfono (WhatsApp)</label>
+                                <input
+                                    type="tel"
+                                    value={customerDetails.phone || ''}
+                                    onChange={(e) => handleChange('phone', e.target.value)}
+                                    className={`w-full p-4 rounded-2xl outline-none transition-all placeholder:text-white/10 text-sm ${isBrutalist ? 'bg-black/40 border border-white/10 text-white focus:border-[--brand-color]/50 focus:bg-black/60 shadow-inner' : 'bg-white/5 border border-white/5 text-white'}`}
+                                    placeholder="Ej: 0412 1234567"
+                                />
+                            </div>
+                        )}
+
+                        <div>
+                            <label className="block text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] mb-2 ml-1">Instrucciones Especiales</label>
+                            <textarea
+                                value={customerDetails.instructions || ''}
+                                onChange={(e) => handleChange('instructions', e.target.value)}
+                                className={`w-full p-4 rounded-2xl outline-none transition-all placeholder:text-white/10 text-sm min-h-[100px] resize-none ${isBrutalist ? 'bg-black/40 border border-white/10 text-white focus:border-[--brand-color]/50 focus:bg-black/60 shadow-inner' : 'bg-white/5 border border-white/5 text-white'}`}
+                                placeholder="Ej: Sin pepinillos, cuenta dividida, etc..."
+                            />
+                        </div>
                     </div>
                 </div>
 
                 {/* Método de Pago */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4">
-                    <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center text-green-600">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+                <div className={`p-6 rounded-[2rem] border relative overflow-hidden ${isBrutalist ? 'bg-white/[0.03] backdrop-blur-xl border-white/[0.08] shadow-2xl' : 'bg-white/5 border-white/5'}`}>
+                    <div className="flex items-center gap-4 mb-6">
+                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${isBrutalist ? 'bg-white/5 border border-white/10 text-green-400' : 'bg-green-500/10 text-green-500'}`}>
+                            <span className="material-symbols-outlined text-xl">payments</span>
                         </div>
-                        Método de Pago Recibido
-                    </h2>
+                        <h2 className={`text-lg text-white ${isBrutalist ? 'font-light tracking-tight' : 'font-black uppercase'}`}>Método de Pago</h2>
+                    </div>
                     <div className="grid grid-cols-2 gap-3">
                         {paymentMethods.map(method => (
                             <button
                                 key={method}
                                 onClick={() => handleChange('paymentMethod', method)}
-                                className={`p-3 rounded-lg border text-sm font-semibold transition-all ${customerDetails.paymentMethod === method
-                                        ? 'bg-green-600 text-white border-green-700 shadow-md'
-                                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                className={`p-4 rounded-2xl border text-xs font-bold transition-all uppercase tracking-widest ${customerDetails.paymentMethod === method
+                                    ? (isBrutalist ? 'bg-gradient-to-br from-green-500 to-emerald-600 text-white border-transparent shadow-lg shadow-green-900/40' : 'bg-green-600 text-white border-green-700 shadow-md')
+                                    : (isBrutalist ? 'bg-white/5 text-white/40 border-white/5 hover:border-white/10' : 'bg-white/5 text-white/40 border-white/5')
                                     }`}
                             >
                                 {method}
@@ -129,33 +169,42 @@ const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
                         ))}
                     </div>
                 </div>
+
+                <div className="h-20"></div> {/* Spacer for bottom button */}
             </div>
 
-            <div className="bg-white p-6 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-20 flex-shrink-0">
-                <div className="flex justify-between items-center mb-4 text-sm text-gray-500">
-                    <span>Monto Total</span>
-                    <span>${cartTotal.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between items-center mb-6">
-                    <span className="font-bold text-gray-800 text-lg">Total a Recibir</span>
+            <div className={`flex-shrink-0 p-8 pt-6 pb-10 z-30 border-t relative overflow-hidden ${isBrutalist ? 'bg-[#121212]/95 backdrop-blur-2xl border-white/10' : 'bg-[#111] border-white/5'}`}>
+                <div className="flex justify-between items-center mb-8 relative z-10">
+                    <div className="flex flex-col gap-1">
+                        <span className="text-white/30 font-semibold uppercase tracking-[0.3em] text-[10px]">Total de Cuenta</span>
+                    </div>
                     <div className="text-right">
-                        <span className="font-black text-3xl text-gray-900">${total.toFixed(2)}</span>
-                        <p className="text-sm font-bold text-gray-500">Bs. {(total * activeRate).toFixed(2)}</p>
+                        <div className="flex items-baseline gap-1 justify-end">
+                            <span className="text-white/30 text-sm font-light tracking-wider">$</span>
+                            <span className={`text-4xl leading-none transition-all ${isBrutalist ? 'text-white font-light tracking-tighter' : 'text-white font-black'}`}>
+                                {isBrutalist ? (
+                                    <>
+                                        <span className="font-semibold">{Math.floor(total)}</span>
+                                        <span className="text-2xl opacity-30">.{((total % 1) * 100).toFixed(0).padStart(2, '0')}</span>
+                                    </>
+                                ) : total.toFixed(2)}
+                            </span>
+                        </div>
+                        <p className="text-[11px] font-medium text-white/20 uppercase tracking-widest mt-2 leading-none">Bs. {(total * activeRate).toFixed(2)}</p>
                     </div>
                 </div>
 
                 <button
                     onClick={onSubmitOrder}
                     disabled={!isFormComplete}
-                    className={`w-full py-4 rounded-xl font-black text-lg shadow-lg flex items-center justify-center gap-2 transition-all ${isFormComplete
-                            ? (isEditing ? 'bg-blue-600 text-white shadow-blue-200' : 'bg-green-600 text-white shadow-green-200')
-                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        }`}
+                    className={`group relative w-full h-16 rounded-[2.2rem] font-bold uppercase tracking-[0.3em] text-[10px] shadow-2xl active:scale-95 transition-all flex items-center justify-center overflow-hidden z-10 ${isFormComplete ? 'text-white' : 'opacity-40 grayscale cursor-not-allowed text-white/50'}`}
                 >
-                    <span>{isEditing ? 'PROCESAR COBRO' : 'Finalizar Pedido'}</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
+                    <div className={`absolute inset-0 transition-transform group-hover:scale-110 ${isBrutalist ? 'bg-gradient-to-br from-[#DC143C] to-[#FF2400]' : (isEditing ? 'bg-blue-600' : 'bg-green-600')}`}></div>
+                    <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <div className="relative flex items-center justify-center gap-4">
+                        <span>{isEditing ? 'PROCESAR COBRO' : 'Confirmar y Enviar Pedido'}</span>
+                        <span className="material-symbols-outlined text-xl">send</span>
+                    </div>
                 </button>
             </div>
         </div>

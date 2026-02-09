@@ -71,7 +71,7 @@ export interface PizzaConfiguration {
 
 // ============= FIN TIPOS PARA PIZZAS =============
 
-export type ThemeName = 'red' | 'blue' | 'green' | 'dark' | 'white' | 'marine' | 'keclick' | 'manga';
+export type ThemeName = 'red' | 'blue' | 'green' | 'dark' | 'white' | 'marine' | 'keclick' | 'manga' | 'brutalist';
 
 export interface StoreProfile {
   id: string;
@@ -101,6 +101,7 @@ export interface CartItem {
   selectedModifiers: SelectedModifier[];
   notes?: string;
   isServed?: boolean;
+  isOriginal?: boolean;
   pizzaConfig?: PizzaConfiguration; // Configuración de pizza si aplica
   kitchenStations?: string[]; // Estaciones de cocina asignadas a este item
   kitchenStatus?: Record<string, 'pending' | 'preparing' | 'ready'>; // Estado por estación: { "Plancha": "ready", "Bebidas": "pending" }
@@ -140,6 +141,7 @@ export interface OrderItem {
   selectedModifiers: SelectedModifier[];
   status?: 'cancelled' | 'pending';
   isServed?: boolean;
+  isOriginal?: boolean;
   pizzaConfig?: PizzaConfiguration; // Configuración de pizza si aplica
 }
 
@@ -190,6 +192,8 @@ export interface SaleRecord {
   notes?: string;
   orderCode?: string; // Added missing orderCode property for table audit
   customerName?: string;
+  customerPhone?: string;
+  instructions?: string;
   closed?: boolean;
   createdAt?: string; // ISO string for precise time tracking
   auditNotes?: AuditEntry[];

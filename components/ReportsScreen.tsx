@@ -17,9 +17,20 @@ interface ReportsScreenProps {
     onEditPendingReport: (report: SaleRecord, targetView?: View) => void;
     onVoidReport: (reportId: string) => void;
     isAdmin: boolean;
-    // SOLUCIÓN REACTIVIDAD: Fuerza re-render cuando llegan datos nuevos
     forceRenderCount?: number;
+    theme?: string;
 }
+
+// Helper functions for bulletproof rendering
+const safeNum = (val: any) => {
+    const n = parseFloat(val);
+    return isNaN(n) ? 0 : n;
+};
+
+const safeStr = (val: any) => {
+    if (!val) return '';
+    return String(val);
+};
 
 const DayClosureModal: React.FC<{
     reports: SaleRecord[];
@@ -33,340 +44,345 @@ const DayClosureModal: React.FC<{
     const today = new Date().toISOString().split('T')[0];
     const waiterName = (currentWaiter || '').toLowerCase().trim();
 
-    const filteredReports = reports.filter(r => {
+    const filteredReports = (reports || []).filter(r => {
+        if (!r) return false;
         const reportDate = (r.date || '').split('T')[0].trim();
         const reportWaiter = (r.waiter || '').toLowerCase().trim();
         const isTargetWaiter = isAdmin ? true : reportWaiter === waiterName;
         return reportDate === today && isTargetWaiter;
     });
-    // Solo sumamos al total lo que NO esté cerrado
-    const totalPaid = filteredReports.reduce((acc, r) => (r.notes !== 'PENDIENTE' && r.notes !== 'ANULADO' && !r.closed) ? acc + (r.type === 'refund' ? -r.total : r.total) : acc, 0);
-    const totalPending = filteredReports.reduce((acc, r) => r.notes === 'PENDIENTE' ? acc + r.total : acc, 0);
+
+    const totalPaid = filteredReports.reduce((acc, r) => {
+        const total = safeNum(r.total);
+        if (r.notes !== 'PENDIENTE' && r.notes !== 'ANULADO' && !r.closed) {
+            return acc + (r.type === 'refund' ? -total : total);
+        }
+        return acc;
+    }, 0);
+
+    const totalPending = filteredReports.reduce((acc, r) => {
+        const total = safeNum(r.total);
+        return r.notes === 'PENDIENTE' ? acc + total : acc;
+    }, 0);
 
     return (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm overflow-y-auto">
-            <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl p-6 my-auto">
+        <div className="fixed inset-0 bg-black/95 flex items-center justify-center z-[9000] p-4 backdrop-blur-md overflow-y-auto">
+            <div className="bg-[#111] border border-[#FFD700]/30 rounded-3xl w-full max-w-md shadow-2xl p-6 my-auto text-white relative">
                 <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-black uppercase text-gray-800 tracking-tighter">Cierre {isAdmin ? 'General' : `de ${currentWaiter}`}</h2>
-                    <button onClick={onClose} className="p-2 bg-gray-100 rounded-full"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                    <h2 className="text-2xl font-black uppercase text-[#FFD700] tracking-tighter">Confirmar Cierre</h2>
+                    <button onClick={onClose} className="p-2 bg-white/5 rounded-full text-white/40"><span className="material-symbols-outlined">close</span></button>
                 </div>
                 <div className="space-y-4">
-                    <div className="bg-green-50 p-4 rounded-2xl border border-green-100">
-                        <p className="text-[10px] font-black text-green-600 uppercase mb-1">Total Cobrado (Caja)</p>
+                    <div className="bg-white/5 p-4 rounded-2xl border border-[#FFD700]/20">
+                        <p className="text-[10px] font-black text-[#FFD700] uppercase mb-1 tracking-widest">Caja (USD)</p>
                         <div className="flex justify-between items-end">
-                            <p className="text-2xl font-black text-green-900">${totalPaid.toFixed(2)}</p>
-                            <p className="text-sm font-bold text-green-700">Bs. {(totalPaid * exchangeRate).toFixed(2)}</p>
+                            <p className="text-3xl font-black text-white tracking-tighter">${totalPaid.toFixed(2)}</p>
+                            <p className="text-sm font-bold text-white/40 font-mono">Bs. {(totalPaid * exchangeRate).toFixed(2)}</p>
                         </div>
                     </div>
-                    <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
-                        <p className="text-[10px] font-black text-amber-600 uppercase mb-1">Por Cobrar (Pendiente)</p>
+                    <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
+                        <p className="text-[10px] font-black text-white/40 uppercase mb-1 tracking-widest">Pendiente</p>
                         <div className="flex justify-between items-end">
-                            <p className="text-2xl font-black text-amber-900">${totalPending.toFixed(2)}</p>
-                            <p className="text-sm font-bold text-amber-700">Bs. {(totalPending * exchangeRate).toFixed(2)}</p>
+                            <p className="text-3xl font-black text-white/60 tracking-tighter">${totalPending.toFixed(2)}</p>
                         </div>
                     </div>
                 </div>
                 <div className="mt-8 space-y-3">
-                    <button onClick={onStartNewDay} className="w-full py-4 bg-red-600 text-white font-black rounded-2xl shadow-lg uppercase tracking-widest">Finalizar Jornada</button>
+                    <button onClick={() => { onStartNewDay(); onClose(); }} className="w-full py-4 bg-[#FFD700] text-black font-black rounded-2xl shadow-lg uppercase tracking-widest active:scale-95 transition-all text-sm">Finalizar Turno</button>
+                    <button onClick={onClose} className="w-full py-3 text-white/20 font-bold uppercase tracking-widest text-[10px]">Volver</button>
                 </div>
             </div>
         </div>
     );
 };
 
-const ReportsScreen: React.FC<ReportsScreenProps> = ({ reports, dayClosures, onGoToTables, onDeleteReports, storeProfile, settings, onStartNewDay, currentWaiter, onOpenSalesHistory, onReprintSaleRecord, isPrinterConnected, onEditPendingReport, onVoidReport, isAdmin, forceRenderCount = 0 }) => {
+const ReportsScreen: React.FC<ReportsScreenProps> = ({ reports, dayClosures, onGoToTables, onDeleteReports, storeProfile, settings, onStartNewDay, currentWaiter, onOpenSalesHistory, onReprintSaleRecord, isPrinterConnected, onEditPendingReport, onVoidReport, isAdmin, forceRenderCount = 0, theme = 'keclick' }) => {
     const [activeSale, setActiveSale] = useState<SaleRecord | null>(null);
     const [showClosureModal, setShowClosureModal] = useState(false);
     const [showClosuresHistory, setShowClosuresHistory] = useState(false);
-    const exchangeRate = settings ? (settings.activeExchangeRate === 'bcv' ? settings.exchangeRateBCV : settings.exchangeRateParallel) : 1;
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [timeRange, setTimeRange] = useState<'Shift' | 'Today' | 'Week'>('Today');
 
-    // SOLUCIÓN REACTIVIDAD: forceRenderCount garantiza actualización cuando llegan cambios de cocina
-    const filteredByWaiterAndDate = useMemo(() => {
+    const exchangeRate = settings ? (settings.activeExchangeRate === 'bcv' ? settings.exchangeRateBCV : settings.exchangeRateParallel) : 1;
+
+    // Safe filtering
+    const filteredReports = useMemo(() => {
+        const safeReports = Array.isArray(reports) ? reports : [];
         const waiterName = (currentWaiter || '').toLowerCase().trim();
-        return reports.filter(r => {
+
+        return safeReports.filter(r => {
+            if (!r) return false;
             const reportWaiter = (r.waiter || '').toLowerCase().trim();
             const reportDate = (r.date || '').split('T')[0].trim();
             const isTargetWaiter = isAdmin ? true : reportWaiter === waiterName;
-            return isTargetWaiter && reportDate === selectedDate;
+
+            if (timeRange === 'Today') return isTargetWaiter && reportDate === selectedDate;
+            if (timeRange === 'Shift') return isTargetWaiter && reportDate === selectedDate && !r.closed;
+
+            try {
+                const d = new Date(selectedDate);
+                const rDate = new Date(reportDate);
+                const diffTime = Math.abs(d.getTime() - rDate.getTime());
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                return isTargetWaiter && diffDays <= 7;
+            } catch (e) {
+                return false;
+            }
         });
-    }, [reports, currentWaiter, selectedDate, isAdmin, forceRenderCount]);
+    }, [reports, currentWaiter, selectedDate, isAdmin, timeRange, forceRenderCount]);
 
-    // Si es admin, queremos ver el total GLOBAL del día, incluyendo lo que ya se cerró.
-    // Si es mesero, solo lo que tiene "en caja" sin cerrar.
-    const totalPaid = filteredByWaiterAndDate.reduce((sum, r) => {
-        const isPaid = r.notes !== 'PENDIENTE' && r.notes !== 'ANULADO';
-        const shouldInclude = isAdmin ? isPaid : (isPaid && !r.closed);
+    const stats = useMemo(() => {
+        let totalSales = 0;
+        let paidCount = 0;
+        let pendingTotal = 0;
 
-        if (shouldInclude) {
-            return r.type === 'refund' ? sum - r.total : sum + r.total;
-        }
-        return sum;
-    }, 0);
-    const totalPending = filteredByWaiterAndDate.reduce((sum, r) => r.notes === 'PENDIENTE' ? sum + r.total : sum, 0);
+        filteredReports.forEach(r => {
+            const total = safeNum(r.total);
+            if (r.notes === 'PENDIENTE') {
+                pendingTotal += total;
+            } else if (r.notes !== 'ANULADO') {
+                totalSales += (r.type === 'refund' ? -total : total);
+                paidCount++;
+            }
+        });
+
+        const avgTicket = paidCount > 0 ? totalSales / paidCount : 0;
+        return { totalSales, avgTicket, pendingTotal, paidCount };
+    }, [filteredReports]);
 
     const isToday = selectedDate === new Date().toISOString().split('T')[0];
 
-    const getStatusColor = (report: SaleRecord) => {
-        if (report.notes === 'PENDIENTE') return 'bg-amber-400';
-        if (report.notes === 'ANULADO') return 'bg-gray-400';
-        if (report.closed) return 'bg-gray-300'; // Cerrado = gris
-        return 'bg-green-500';
+    const getStatusInfo = (report: SaleRecord) => {
+        if (report.notes === 'PENDIENTE') return { color: 'bg-[#FFD700]', label: 'Pendiente', badge: 'bg-[#FFD700]/10 text-[#FFD700]' };
+        if (report.notes === 'ANULADO') return { color: 'bg-white/20', label: 'Anulado', badge: 'bg-white/5 text-white/40' };
+        if (report.closed) return { color: 'bg-white/10', label: 'Cerrado', badge: 'bg-white/5 text-white/20' };
+        return { color: 'bg-[#0bda19]', label: 'Pagado', badge: 'bg-[#0bda19]/10 text-[#0bda19]' };
     };
 
-    const getBadgeClass = (report: SaleRecord) => {
-        if (report.notes === 'PENDIENTE') return 'bg-amber-100 text-amber-600';
-        if (report.notes === 'ANULADO') return 'bg-gray-100 text-gray-600';
-        if (report.closed) return 'bg-gray-200 text-gray-500'; // Cerrado = gris
-        return 'bg-green-100 text-green-600';
-    };
-
-    const getClosedLabel = (report: SaleRecord) => {
-        if (report.closed) return 'CERRADO';
-        return report.notes || 'PAGADO';
-    };
+    // Safe day closures
+    const safeDayClosures = useMemo(() => {
+        return Array.isArray(dayClosures) ? dayClosures.filter(c => c && typeof c === 'object') : [];
+    }, [dayClosures]);
 
     return (
-        <>
-            <div className="max-w-4xl mx-auto h-screen flex flex-col bg-white">
-                <header className="flex-shrink-0 flex items-center justify-between p-4 border-b">
-                    <button onClick={onGoToTables} className="p-2 bg-gray-100 rounded-xl"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg></button>
-                    <div className="text-center">
-                        <h1 className="text-sm font-black uppercase text-gray-800 leading-none">Ventas: {isAdmin ? 'Global' : currentWaiter}</h1>
-                    </div>
-                    <button onClick={() => setShowClosuresHistory(true)} className="p-2 bg-purple-100 rounded-xl text-purple-600" title="Ver Cierres Anteriores">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                    </button>
-                </header>
+        <div className="flex flex-col h-full bg-black text-white overflow-hidden relative font-sans w-full">
+            {/* Background Effects */}
+            <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#FFD700 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
 
-                <div className="bg-gray-50 border-b p-4 flex items-center justify-between shadow-inner">
-                    <button onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() - 1); setSelectedDate(d.toISOString().split('T')[0]); }} className="w-12 h-12 flex items-center justify-center bg-white rounded-full shadow-md active:scale-90 transition-transform">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
-                    </button>
-                    <div className="flex flex-col items-center">
-                        <span className={`text-[10px] font-black uppercase tracking-widest mb-0.5 ${isToday ? 'text-red-500' : 'text-gray-400'}`}>{isToday ? 'Hoy' : 'Historial'}</span>
-                        <span className="text-lg font-black text-black tabular-nums">{selectedDate}</span>
-                    </div>
-                    <button onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() + 1); setSelectedDate(d.toISOString().split('T')[0]); }} disabled={isToday} className={`w-12 h-12 flex items-center justify-center bg-white rounded-full shadow-md active:scale-90 transition-transform ${isToday ? 'opacity-30' : ''}`}>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
+            {/* Header */}
+            <header className="flex items-center bg-[#111]/90 p-4 justify-between sticky top-0 z-[60] backdrop-blur-xl border-b border-white/5 shrink-0 h-20">
+                <button onClick={onGoToTables} className="text-[#FFD700] w-12 h-12 flex items-center justify-center active:scale-95 transition-transform shrink-0">
+                    <span className="material-symbols-outlined text-3xl">menu</span>
+                </button>
+                <div className="flex-1 text-center font-bold px-2 overflow-hidden">
+                    <h2 className="text-white text-lg font-black uppercase italic tracking-tighter truncate">Dashboard</h2>
+                    <p className="text-[9px] font-black text-[#FFD700] uppercase tracking-[0.2em] truncate">{currentWaiter}</p>
+                </div>
+                <div className="w-12 flex justify-end shrink-0">
+                    <button
+                        onClick={() => setShowClosuresHistory(true)}
+                        className="w-10 h-10 flex items-center justify-center rounded-full bg-[#FF0000]/20 text-[#FF0000] border border-[#FF0000]/30 active:scale-90 transition-transform shadow-[0_0_15px_rgba(255,0,0,0.2)] shrink-0"
+                        title="Historial de Cierres"
+                    >
+                        <span className="material-symbols-outlined text-xl">receipt_long</span>
                     </button>
                 </div>
+            </header>
 
-                <div className="flex-grow overflow-y-auto p-4 space-y-6">
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-green-600 p-4 rounded-3xl text-white shadow-lg">
-                            <p className="text-[10px] font-black uppercase opacity-80 mb-1">Total Cobrado</p>
-                            <p className="text-2xl font-black">${totalPaid.toFixed(2)}</p>
-                        </div>
-                        <div className="bg-amber-500 p-4 rounded-3xl text-white shadow-lg">
-                            <p className="text-[10px] font-black uppercase opacity-80 mb-1">Por Cobrar</p>
-                            <p className="text-2xl font-black">${totalPending.toFixed(2)}</p>
+            {/* Main Content */}
+            <div className="flex-grow overflow-y-auto scrollbar-hide pb-36 relative z-10 w-full">
+                {/* Stats Cards */}
+                <div className="flex overflow-x-auto gap-4 p-5 no-scrollbar w-full">
+                    <div className="flex min-w-[45%] flex-1 flex-col gap-1 rounded-[2rem] p-5 bg-white/[0.03] border border-white/10 border-l-[4px] border-l-[#FFD700]">
+                        <p className="text-white/30 text-[9px] font-black uppercase tracking-widest">Ventas</p>
+                        <p className="text-white tracking-tighter text-2xl font-black tabular-nums font-mono truncate">${stats.totalSales.toFixed(2)}</p>
+                    </div>
+                    <div className="flex min-w-[45%] flex-1 flex-col gap-1 rounded-[2rem] p-5 bg-white/[0.03] border border-white/10 border-l-[4px] border-l-[#FF0000]">
+                        <p className="text-white/30 text-[9px] font-black uppercase tracking-widest">Ticket</p>
+                        <p className="text-white tracking-tighter text-2xl font-black tabular-nums font-mono truncate">${stats.avgTicket.toFixed(2)}</p>
+                    </div>
+                </div>
+
+                {/* Filter Selector */}
+                <div className="px-5 py-2 w-full">
+                    <div className="flex h-12 items-center justify-center rounded-2xl bg-white/[0.02] border border-white/10 p-1 backdrop-blur-md w-full">
+                        {(['Shift', 'Today', 'Week'] as const).map(range => (
+                            <button key={range} onClick={() => setTimeRange(range)} className={`flex h-full grow items-center justify-center rounded-xl px-2 text-[10px] font-black uppercase tracking-widest transition-all ${timeRange === range ? 'bg-[#FFD700] text-black shadow-lg font-bold' : 'text-white/30 font-medium'}`}>
+                                {range === 'Today' ? 'Hoy' : (range === 'Shift' ? 'Turno' : 'Semana')}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Ticket List */}
+                <div className="px-5 pt-6 w-full">
+                    <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-white text-lg font-black uppercase italic tracking-tighter">Historial</h3>
+                        <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-xl border border-white/10">
+                            <button onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() - 1); setSelectedDate(d.toISOString().split('T')[0]); }} className="text-[#FFD700] active:scale-90"><span className="material-symbols-outlined text-sm">arrow_back</span></button>
+                            <span className="text-[10px] font-black text-white tabular-nums">{selectedDate}</span>
+                            <button disabled={isToday} onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() + 1); setSelectedDate(d.toISOString().split('T')[0]); }} className={`text-[#FFD700] active:scale-90 ${isToday ? 'opacity-20' : ''}`}><span className="material-symbols-outlined text-sm">arrow_forward</span></button>
                         </div>
                     </div>
-
-                    <div className="flex gap-2">
-                        <button onClick={onOpenSalesHistory} className="flex-1 py-3 bg-gray-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest">Inventario</button>
-                        {isToday && <button onClick={() => setShowClosureModal(true)} className="flex-1 py-3 bg-red-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest">Cerrar Caja</button>}
-                    </div>
-
-                    <div className="space-y-3">
-                        {filteredByWaiterAndDate.map(report => (
-                            <div key={report.id} onClick={() => setActiveSale(report)} className={`p-4 rounded-2xl border flex justify-between items-center active:bg-gray-50 transition-colors cursor-pointer shadow-sm ${report.closed ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-100'}`}>
-                                <div className="flex gap-3 items-center">
-                                    <div className={`w-2 h-10 rounded-full ${getStatusColor(report)}`}></div>
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <p className={`font-bold text-sm leading-none ${report.notes === 'ANULADO' || report.closed ? 'text-gray-400' : 'text-black'} ${report.notes === 'ANULADO' ? 'line-through' : ''}`}>{report.customerName || (report.tableNumber > 0 ? `Ref: ${report.tableNumber}` : 'Pedido')}</p>
-                                            {report.order.some((item: any) => Object.values(item.kitchenStatus || {}).includes('ready') && !item.isServed) && (
-                                                <span className="flex h-5 w-5 items-center justify-center bg-green-500 text-white rounded-full animate-bounce shadow-lg shadow-green-200">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}>
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                                    </svg>
-                                                </span>
-                                            )}
-
-                                        </div>
-                                        <div className="flex items-center gap-1.5 mt-0.5">
-                                            <div className="flex flex-wrap gap-1 mt-1 max-w-[150px]">
-                                                {report.order.map((item: any, idx) => {
-                                                    // Si el pedido está ANULADO, mostramos puntos rojos/grises y paramos lógica
-                                                    if (report.notes === 'ANULADO') {
-                                                        return <div key={idx} className="w-2 h-2 rounded-full bg-red-200" title="Anulado" />;
-                                                    }
-
-                                                    let dotClass = 'bg-gray-300'; // Pendiente
-                                                    const statuses = Object.values(item.kitchenStatus || {});
-
-                                                    if (item.isServed) {
-                                                        dotClass = 'bg-purple-500'; // Entregado
-                                                    } else if (statuses.includes('ready')) {
-                                                        dotClass = 'bg-green-500 animate-pulse'; // Listo
-                                                    } else if (statuses.includes('preparing')) {
-                                                        dotClass = 'bg-amber-500 animate-pulse'; // Preparando
-                                                    }
-
-                                                    return (
-                                                        <div key={idx} className={`w-2 h-2 rounded-full ${dotClass}`} title={`${item.quantity}x ${item.name}`} />
-                                                    );
-                                                })}
+                    <div className="space-y-3 pb-8">
+                        {filteredReports.map(report => {
+                            const status = getStatusInfo(report);
+                            return (
+                                <div key={report.id} onClick={() => setActiveSale(report)} className="bg-white/[0.04] border border-white/10 rounded-[2rem] p-5 flex justify-between items-center active:scale-[0.98] transition-transform w-full">
+                                    <div className="flex gap-4 items-center overflow-hidden">
+                                        <div className={`w-1 h-8 rounded-full ${status.color} shrink-0`}></div>
+                                        <div className="overflow-hidden">
+                                            <p className={`font-black text-sm tracking-tight truncate ${report.notes === 'ANULADO' ? 'text-white/20 line-through' : 'text-white'}`}>{report.customerName || (report.tableNumber > 0 ? `Boca #${report.tableNumber}` : 'Ticket')}</p>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className={`text-[8px] font-black px-2 py-0.5 rounded-lg border uppercase shrink-0 ${status.badge}`}>{status.label}</span>
+                                                <span className="text-[9px] font-black text-white/20 uppercase tabular-nums truncate">{report.time}</span>
                                             </div>
-                                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${getBadgeClass(report)}`}>{getClosedLabel(report)}</span>
-                                            <span className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">Mesero: {report.waiter}</span>
                                         </div>
                                     </div>
+                                    <div className="text-right shrink-0 ml-2">
+                                        <p className="font-black text-lg tracking-tighter font-mono">${safeNum(report.total).toFixed(2)}</p>
+                                    </div>
                                 </div>
-                                <div className="text-right">
-                                    <p className={`font-black text-lg leading-none ${report.notes === 'ANULADO' || report.closed ? 'text-gray-400' : 'text-black'}`}>${report.total.toFixed(2)}</p>
-                                    <p className="text-[10px] font-bold text-gray-400 mt-1">Bs. {(report.total * exchangeRate).toFixed(2)}</p>
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
+                        {filteredReports.length === 0 && (
+                            <div className="text-center py-16 opacity-20 italic text-sm">Sin registros</div>
+                        )}
                     </div>
                 </div>
             </div>
 
-            {activeSale && (
-                <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-[110] p-4" onClick={() => setActiveSale(null)}>
-                    <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
-                        <div className="flex justify-between items-start mb-1">
-                            <h3 className="text-lg font-black text-black uppercase tracking-tight">Detalle de Venta</h3>
-                            <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${getBadgeClass(activeSale)}`}>{getClosedLabel(activeSale)}</span>
+            {/* Bottom Nav */}
+            <nav className="fixed bottom-0 w-full bg-[#111]/95 backdrop-blur-2xl border-t border-white/5 px-6 pt-4 pb-8 flex justify-around items-center z-[8000] shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+                <button onClick={onGoToTables} className="flex flex-col items-center gap-1 text-white/30 h-14 justify-center w-16 active:text-white transition-colors">
+                    <span className="material-symbols-outlined text-2xl">table_restaurant</span>
+                    <span className="text-[8px] font-black uppercase tracking-widest">Mesas</span>
+                </button>
+                {isToday && (
+                    <button onClick={() => setShowClosureModal(true)} className="flex flex-col items-center gap-1 text-[#FF0000] active:scale-95 transition-transform h-16 justify-center -mt-6">
+                        <div className="w-14 h-14 bg-[#FF0000] rounded-full flex items-center justify-center text-white shadow-2xl border-4 border-[#111] shadow-[#FF0000]/30">
+                            <span className="material-symbols-outlined text-2xl font-bold">power_settings_new</span>
                         </div>
-                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-4">Atendido por: {activeSale.waiter} • {activeSale.time}</p>
-                        <div className="space-y-2 mb-6 max-h-60 overflow-y-auto">
-                            {activeSale.order.map((item: any, idx) => (
-                                <div key={idx} className="flex flex-col text-sm border-b border-gray-50 pb-2 last:border-0">
-                                    <div className="flex justify-between items-start gap-2">
-                                        <div className="flex items-center gap-2">
-                                            <span className={`font-bold leading-tight ${Object.values(item.kitchenStatus || {}).includes('ready') ? 'text-green-600' : 'text-gray-600'}`}>
-                                                {item.quantity}x {item.name}
-                                            </span>
-                                            {Object.values(item.kitchenStatus || {}).includes('ready') && (
-                                                <span className="text-[10px] font-black text-green-600 uppercase tracking-tighter">LISTO</span>
-                                            )}
-                                        </div>
-                                        <span className="font-black text-black shrink-0">${(item.price * item.quantity).toFixed(2)}</span>
-                                    </div>
-                                    {item.selectedModifiers && item.selectedModifiers.length > 0 && (
-                                        <div className="mt-1 space-y-0.5">
-                                            {(() => {
-                                                const groups: Record<string, string[]> = {};
-                                                item.selectedModifiers.forEach((m: any) => {
-                                                    const title = m.groupTitle || 'Extra';
-                                                    if (!groups[title]) groups[title] = [];
-                                                    groups[title].push(m.option.name);
-                                                });
-                                                return Object.entries(groups).map(([groupTitle, options]) => (
-                                                    <p key={groupTitle} className="text-[9px] text-gray-500 leading-tight pl-2">
-                                                        <span className="font-bold uppercase text-[7px] text-gray-400 mr-1">{groupTitle}:</span>
-                                                        {options.join(', ')}
-                                                    </p>
-                                                ));
-                                            })()}
-                                        </div>
-                                    )}
+                        <span className="text-[8px] font-black uppercase tracking-widest mt-1">Cerrar</span>
+                    </button>
+                )}
+                <button onClick={onOpenSalesHistory} className="flex flex-col items-center gap-1 text-white/30 h-14 justify-center w-16 active:text-white transition-colors">
+                    <span className="material-symbols-outlined text-2xl">inventory</span>
+                    <span className="text-[8px] font-black uppercase tracking-widest">Kardex</span>
+                </button>
+            </nav>
+
+            {/* Modals - High Z-Index to prevent blank screens */}
+            {activeSale && (
+                <div className="fixed inset-0 bg-black/95 backdrop-blur-xl flex items-center justify-center z-[9500] p-4" onClick={() => setActiveSale(null)}>
+                    <div className="bg-[#111] border border-white/10 rounded-[2.5rem] p-6 w-full max-w-sm shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+                        <h3 className="text-xl font-black uppercase tracking-tighter text-white mb-6 italic">Detalle Venta</h3>
+                        <div className="space-y-4 mb-8 max-h-[50vh] overflow-y-auto pr-2 scrollbar-hide">
+                            {(activeSale.order || []).map((item: any, idx) => (
+                                <div key={idx} className="pb-3 border-b border-white/5 last:border-0 flex justify-between items-start">
+                                    <span className="text-sm font-bold text-white/80 w-[70%]">{item.quantity}x {item.name}</span>
+                                    <span className="text-base font-black text-white font-mono w-[30%] text-right">${(safeNum(item.price) * safeNum(item.quantity)).toFixed(2)}</span>
                                 </div>
                             ))}
                         </div>
-
-                        <div className="mt-8 space-y-3">
+                        <div className="pt-4 border-t border-white/10 flex justify-between items-center mb-6">
+                            <span className="text-[10px] font-black text-white/30 uppercase tracking-widest">Total</span>
+                            <span className="text-2xl font-black text-[#FFD700] font-mono">${safeNum(activeSale.total).toFixed(2)}</span>
+                        </div>
+                        <div className="flex flex-col gap-3">
                             {activeSale.notes === 'PENDIENTE' && (
-                                <div className="space-y-3">
+                                <div className="grid grid-cols-2 gap-3">
                                     <button
-                                        onClick={() => { onEditPendingReport(activeSale, 'checkout'); setActiveSale(null); }}
-                                        className="w-full py-4 bg-green-600 text-white rounded-2xl font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-2"
+                                        onClick={() => {
+                                            onEditPendingReport(activeSale, 'menu');
+                                            setActiveSale(null);
+                                        }}
+                                        className="py-4 bg-white/10 text-white font-black uppercase text-[10px] tracking-widest rounded-xl active:scale-95 transition-transform border border-white/10"
                                     >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                                        Cobrar Cuenta
+                                        + Agregar
                                     </button>
                                     <button
-                                        onClick={() => { onEditPendingReport(activeSale, 'menu'); setActiveSale(null); }}
-                                        className="w-full py-4 bg-amber-500 text-white rounded-2xl font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-2"
+                                        onClick={() => {
+                                            onEditPendingReport(activeSale, 'checkout');
+                                            setActiveSale(null);
+                                        }}
+                                        className="py-4 bg-[#FFD700] text-black font-black uppercase text-[10px] tracking-widest rounded-xl active:scale-95 transition-transform shadow-lg shadow-[#FFD700]/20"
                                     >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                                        Añadir más productos
+                                        $$ Cobrar
                                     </button>
                                 </div>
                             )}
-                            {activeSale.notes !== 'ANULADO' && (
-                                <button
-                                    onClick={() => onVoidReport(activeSale.id)}
-                                    className="w-full py-3 bg-red-50 text-red-600 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-red-100"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                    Anular Ticket (Admin PIN)
-                                </button>
-                            )}
-                            <button
-                                onClick={() => onReprintSaleRecord(activeSale)}
-                                disabled={activeSale.notes === 'ANULADO'}
-                                className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest transition-all ${isPrinterConnected ? 'bg-blue-600 text-white' : 'bg-gray-800 text-white shadow-xl'}`}
-                            >
-                                {isPrinterConnected ? 'Imprimir Recibo' : 'Imprimir (PC / Cable)'}
-                            </button>
-                            <button onClick={() => setActiveSale(null)} className="w-full py-3 bg-gray-200 text-gray-700 rounded-2xl font-bold uppercase tracking-widest">Cerrar Detalle</button>
+                            <button onClick={() => setActiveSale(null)} className="w-full py-4 text-white/20 font-black uppercase text-[10px] tracking-[0.3em] bg-white/5 rounded-xl active:bg-white/10 transition-colors">Cerrar</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {showClosureModal && settings && onStartNewDay && <DayClosureModal reports={reports} settings={settings} onClose={() => setShowClosureModal(false)} onStartNewDay={onStartNewDay} currentWaiter={currentWaiter} isAdmin={isAdmin} />}
+            {showClosureModal && settings && onStartNewDay && (
+                <DayClosureModal reports={reports} settings={settings} onClose={() => setShowClosureModal(false)} onStartNewDay={onStartNewDay} currentWaiter={currentWaiter} isAdmin={isAdmin} />
+            )}
 
-            {/* Modal de Historial de Cierres */}
             {showClosuresHistory && (
-                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm overflow-y-auto" onClick={() => setShowClosuresHistory(false)}>
-                    <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl my-auto" onClick={e => e.stopPropagation()}>
-                        <div className="flex justify-between items-center p-4 border-b">
-                            <h2 className="text-xl font-black uppercase text-gray-800 tracking-tighter">Historial de Cierres</h2>
-                            <button onClick={() => setShowClosuresHistory(false)} className="p-2 bg-gray-100 rounded-full"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                <div className="fixed inset-0 bg-black/98 flex items-center justify-center z-[9000] p-4 animate-in fade-in duration-200" onClick={() => setShowClosuresHistory(false)}>
+                    <div className="bg-[#111] border border-white/10 rounded-[2.5rem] w-full max-w-lg shadow-2xl flex flex-col max-h-[85vh] overflow-hidden relative" onClick={e => e.stopPropagation()}>
+                        {/* Header */}
+                        <div className="p-6 border-b border-white/5 flex justify-between items-center bg-[#111] z-10 shrink-0">
+                            <div>
+                                <h2 className="text-xl font-black uppercase tracking-tighter text-white italic">Historial Cierres</h2>
+                                <p className="text-[9px] font-black text-[#FF0000] uppercase tracking-widest mt-1">Turnos Finalizados</p>
+                            </div>
+                            <button onClick={() => setShowClosuresHistory(false)} className="w-10 h-10 bg-white/5 rounded-full text-white/40 flex items-center justify-center active:bg-white/10"><span className="material-symbols-outlined">close</span></button>
                         </div>
-                        <div className="p-4 max-h-[70vh] overflow-y-auto space-y-3">
-                            {dayClosures
-                                .filter(c => isAdmin ? true : c.closedBy === currentWaiter)
-                                .filter(c => c.date === selectedDate)
-                                .length === 0 ? (
-                                <div className="py-12 text-center">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-gray-200 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                    <p className="text-gray-400 italic">No hay cierres registrados para esta fecha.</p>
-                                </div>
-                            ) : (
-                                dayClosures
-                                    .filter(c => isAdmin ? true : c.closedBy === currentWaiter)
-                                    .filter(c => c.date === selectedDate)
-                                    .map(closure => (
-                                        <div key={closure.id} className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-100 rounded-2xl p-4">
-                                            <div className="flex justify-between items-start mb-3">
-                                                <div>
-                                                    <p className="text-[10px] font-black text-green-600 uppercase">Cierre #{closure.id.slice(-4)}</p>
-                                                    <p className="text-sm font-bold text-gray-800">{new Date(closure.closedAt).toLocaleTimeString()}</p>
-                                                </div>
-                                                <span className={`text-[9px] font-black px-2 py-1 rounded-full uppercase ${closure.isAdminClosure ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>
-                                                    {closure.isAdminClosure ? 'Admin' : closure.closedBy}
-                                                </span>
+
+                        {/* Content */}
+                        <div className="p-6 overflow-y-auto space-y-4 flex-grow scrollbar-hide bg-black/20">
+                            {safeDayClosures.length > 0 ? (
+                                safeDayClosures.map((closure, idx) => (
+                                    <div key={closure.id || idx} className="rounded-[2rem] p-5 border border-white/10 bg-white/[0.03] relative overflow-hidden shrink-0">
+                                        <div className="absolute top-0 left-0 w-1.5 h-full bg-[#FF0000]/50"></div>
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div>
+                                                <p className="text-[9px] font-black text-[#FF0000] uppercase tracking-widest mb-1">{safeStr(closure.date)}</p>
+                                                <p className="text-lg font-bold text-white tracking-tight">
+                                                    {(() => {
+                                                        try {
+                                                            return new Date(closure.closedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                                        } catch (e) {
+                                                            return '---';
+                                                        }
+                                                    })()}
+                                                </p>
                                             </div>
-                                            <div className="grid grid-cols-2 gap-2 text-sm">
-                                                <div className="bg-white/60 rounded-lg p-2">
-                                                    <p className="text-[9px] font-bold text-gray-400 uppercase">Total Cerrado</p>
-                                                    <p className="text-lg font-black text-green-700">${closure.totalPaid.toFixed(2)}</p>
-                                                </div>
-                                                <div className="bg-white/60 rounded-lg p-2">
-                                                    <p className="text-[9px] font-bold text-gray-400 uppercase">Ventas</p>
-                                                    <p className="text-lg font-black text-gray-700">{closure.salesCount}</p>
-                                                </div>
-                                            </div>
-                                            {closure.totalPending > 0 && (
-                                                <div className="mt-2 text-[10px] font-bold text-amber-600">
-                                                    ⚠️ Pendiente al cierre: ${closure.totalPending.toFixed(2)}
-                                                </div>
-                                            )}
+                                            <span className="text-[9px] font-black px-3 py-1 bg-[#FF0000]/10 text-[#FF0000] rounded-lg border border-[#FF0000]/20 uppercase truncate max-w-[100px]">{safeStr(closure.closedBy)}</span>
                                         </div>
-                                    ))
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="bg-black/60 p-3 rounded-2xl border border-white/5">
+                                                <p className="text-[8px] text-white/30 uppercase mb-1">Caja</p>
+                                                <p className="text-lg font-black font-mono tracking-tighter">${safeNum(closure.totalPaid).toFixed(2)}</p>
+                                            </div>
+                                            <div className="bg-black/60 p-3 rounded-2xl border border-white/5 text-right">
+                                                <p className="text-[8px] text-white/30 uppercase mb-1">Items</p>
+                                                <p className="text-lg font-black font-mono tracking-tighter text-[#FFD700]">{safeNum(closure.salesCount)}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="py-20 text-center flex flex-col items-center">
+                                    <span className="material-symbols-outlined text-5xl text-white/5 mb-4">history</span>
+                                    <p className="text-white/20 italic text-sm font-medium">No hay historial disponible</p>
+                                </div>
                             )}
+                        </div>
+
+                        {/* Footer Action */}
+                        <div className="p-4 bg-[#111] border-t border-white/5 shrink-0 z-10">
+                            <button onClick={() => setShowClosuresHistory(false)} className="w-full py-4 bg-white/5 text-white/30 font-black uppercase text-[10px] tracking-widest rounded-2xl active:bg-white/10 transition-colors">Cerrar Panel</button>
                         </div>
                     </div>
                 </div>
             )}
-        </>
+        </div>
     );
 };
 

@@ -30,9 +30,11 @@ interface CartScreenProps {
     isAdmin?: boolean;
 }
 
-const CartScreen: React.FC<CartScreenProps> = (props) => {
-    const { activeRate, isEditing = false, isAdmin = false } = props;
+const CartScreen: React.FC<CartScreenProps & { theme?: string }> = (props) => {
+    const { activeRate, isEditing = false, isAdmin = false, theme = 'keclick' } = props;
     const isPosMode = props.table !== undefined;
+    const isBrutalist = theme === 'brutalist';
+    const isMidnight = theme === 'midnight';
 
     // --- MODO DELIVERY / POS SIMPLE ---
     const { cart, onUpdateQuantity, onRemoveItem, onBackToMenu, onGoToCheckout, onEditItem, onClearCart } = props;
@@ -45,35 +47,41 @@ const CartScreen: React.FC<CartScreenProps> = (props) => {
 
     if (cart.length === 0) {
         return (
-            <div className="flex flex-col h-full bg-white overflow-hidden">
-                <header className="p-4 flex items-center border-b flex-shrink-0">
-                    <button onClick={onBackToMenu} className="p-2 rounded-full active:bg-gray-100">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+            <div className={`flex flex-col h-full overflow-hidden ${isBrutalist ? 'bg-[#121212]' : (isMidnight ? 'bg-transparent' : 'bg-black')}`}>
+                <header className={`p-4 flex items-center border-b flex-shrink-0 z-10 ${isBrutalist ? 'bg-white/[0.03] backdrop-blur-xl border-white/5' : 'bg-black border-white/10'}`}>
+                    <button onClick={onBackToMenu} className="p-2 rounded-full active:bg-white/10 transition-colors">
+                        <span className="material-symbols-outlined text-white">arrow_back</span>
                     </button>
-                    <h1 className="ml-4 text-xl font-bold text-gray-800">Tu Carrito</h1>
+                    <h1 className="ml-4 text-xl font-bold text-white">Tu Carrito</h1>
                 </header>
-                <div className="flex-grow flex flex-col items-center justify-center p-8 text-center">
-                    <div className="w-32 h-32 bg-gray-50 rounded-full flex items-center justify-center mb-6">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
+                <div className="flex-grow flex flex-col items-center justify-center p-8 text-center relative">
+                    {isBrutalist && (
+                        <>
+                            <div className="absolute top-1/4 left-1/4 w-32 h-32 bg-crimson/5 blur-[80px] rounded-full pointer-events-none"></div>
+                            <div className="absolute bottom-1/4 right-1/4 w-32 h-32 bg-amber/5 blur-[80px] rounded-full pointer-events-none"></div>
+                        </>
+                    )}
+                    <div className={`w-36 h-36 rounded-full flex items-center justify-center mb-8 ${isBrutalist ? 'bg-white/[0.03] border border-white/10 backdrop-blur-xl shadow-2xl' : 'bg-white/5'}`}>
+                        <span className={`material-symbols-outlined text-5xl ${isBrutalist ? 'text-white/20' : 'text-zinc-700'}`}>shopping_cart_off</span>
                     </div>
-                    <h2 className="text-2xl font-bold text-gray-800 mb-2">Carrito vacío</h2>
-                    <p className="text-gray-500 mb-8">¡Agrega algo delicioso!</p>
-                    <button onClick={onBackToMenu} className="px-8 py-3 bg-[var(--brand-color)] text-white font-bold rounded-xl shadow-lg active:scale-95 transition-all">Ir al Menú</button>
+                    <h2 className={`text-2xl mb-2 text-white ${isBrutalist ? 'font-light tracking-tight' : 'font-black'}`}>Carrito vacío</h2>
+                    <p className="text-white/40 mb-10 text-sm">¡Aún no has agregado nada!</p>
+                    <button onClick={onBackToMenu} className={`px-10 py-4 font-bold rounded-2xl shadow-xl active:scale-95 transition-all uppercase tracking-widest text-xs ${isBrutalist ? 'bg-[--red-gradient] text-white' : 'bg-[var(--brand-color)] text-white'}`}>Explorar Menú</button>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="flex flex-col h-full bg-gray-50 overflow-hidden">
-            <header className="p-4 bg-white shadow-sm flex-shrink-0 z-10 flex items-center justify-between border-b">
+        <div className={`flex flex-col h-full overflow-hidden ${isBrutalist ? 'bg-[#121212]' : (isMidnight ? 'bg-transparent' : 'bg-black')}`}>
+            <header className={`p-4 flex-shrink-0 z-20 flex items-center justify-between border-b ${isBrutalist ? 'bg-white/[0.03] backdrop-blur-xl border-white/5' : (isMidnight ? 'bg-white/5 backdrop-blur-xl border-white/10' : 'bg-[#111] border-white/10')}`}>
                 <div className="flex items-center">
-                    <button onClick={onBackToMenu} className="p-2 rounded-full active:bg-gray-100 mr-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                    <button onClick={onBackToMenu} className="p-2 rounded-full active:bg-white/10 transition-all mr-2">
+                        <span className="material-symbols-outlined text-white">arrow_back</span>
                     </button>
                     <div className="flex flex-col">
-                        <h1 className="text-xl font-bold text-gray-800 leading-none">Tu Pedido</h1>
-                        {isEditing && <span className="text-[10px] font-black text-amber-500 uppercase mt-1">Modificando Cuenta</span>}
+                        <h1 className={`text-xl font-bold text-white leading-none ${isBrutalist ? 'tracking-tight' : ''}`}>Tu Pedido</h1>
+                        {isEditing && <span className="text-[9px] font-bold text-amber-500 uppercase mt-1 tracking-widest">Editando Comanda</span>}
                     </div>
                 </div>
 
@@ -82,35 +90,56 @@ const CartScreen: React.FC<CartScreenProps> = (props) => {
                         <button
                             type="button"
                             onClick={() => onClearCart()}
-                            onTouchEnd={(e) => { e.preventDefault(); onClearCart(); }}
-                            className={`p-2 ${isEditing ? 'text-amber-600 bg-amber-50' : 'text-red-600 hover:bg-red-50'} rounded-full transition-colors flex items-center gap-1 px-4 relative z-50`}
-                            title={isEditing ? "Abandonar edición" : "Borrar todo el pedido"}
+                            className={`p-2 rounded-xl transition-all flex items-center gap-2 px-4 relative z-50 group ${isBrutalist ? 'bg-white/[0.05] border border-white/10 text-white/60 hover:text-white' : 'text-red-600 bg-red-500/10 hover:bg-red-500/20'}`}
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                            {isEditing && <span className="text-[10px] font-black uppercase">Abandonar</span>}
+                            <span className="material-symbols-outlined text-xl">delete_sweep</span>
+                            <span className="text-[10px] font-bold uppercase tracking-widest">{isEditing ? 'Abandonar' : 'Limpiar'}</span>
                         </button>
                     )}
-                    {!isEditing && <span className="text-xs font-black uppercase text-gray-400 bg-gray-100 px-3 py-1 rounded-full">{cart.reduce((a, c) => a + c.quantity, 0)} items</span>}
                 </div>
             </header>
 
-            <div className="flex-grow overflow-y-auto p-4 space-y-4 scrollbar-hide">
+            <div className={`flex-grow overflow-y-auto p-5 space-y-5 scrollbar-hide relative`}>
+                {isBrutalist && (
+                    <>
+                        <div className="fixed top-1/3 left-0 w-64 h-64 bg-crimson/[0.03] blur-[120px] rounded-full pointer-events-none"></div>
+                        <div className="fixed bottom-1/3 right-0 w-64 h-64 bg-amber/[0.03] blur-[120px] rounded-full pointer-events-none"></div>
+                    </>
+                )}
+
                 {cart.map(item => {
                     const modTotal = item.selectedModifiers.reduce((s, m) => s + m.option.price, 0);
                     const unitPrice = item.price + modTotal;
-                    // El Admin puede editar incluso lo que ya está servido
-                    const isOriginal = item.isServed && !isAdmin;
+                    const isOriginalItem = item.notes === 'original' || item.isOriginal || false;
+                    const isLocked = (item.isServed || isOriginalItem) && !isAdmin;
 
                     return (
-                        <div key={item.id} className={`bg-white p-4 rounded-xl shadow-sm border ${isOriginal ? 'border-amber-200 bg-amber-50/20' : 'border-gray-100'} flex flex-col`}>
-                            <div className="flex justify-between items-start mb-2">
-                                <div className="max-w-[70%]">
-                                    <div className="flex items-center gap-2">
-                                        <h3 className="font-bold text-base text-gray-800 leading-tight">{item.name}</h3>
-                                        {isOriginal && <span className="bg-amber-500 text-white text-[8px] font-black px-1 py-0.5 rounded-full uppercase tracking-tighter">Servido</span>}
+                        <div key={item.id} className={`p-6 rounded-[2rem] border transition-all flex flex-col relative overflow-hidden group ${isBrutalist
+                            ? 'bg-white/[0.03] backdrop-blur-xl border-white/[0.08] shadow-2xl'
+                            : (isLocked ? 'bg-[#1a1a00] border-amber-900/30' : 'bg-white/5 border-white/5 shadow-xl')}`}>
+
+                            {isBrutalist && <div className="absolute top-0 right-0 p-4 opacity-50"><div className="w-1 h-1 rounded-full bg-white/20"></div></div>}
+
+                            <div className="flex justify-between items-start mb-4">
+                                <div className="max-w-[75%]">
+                                    <div className="flex items-center gap-3 mb-1">
+                                        <span className={`text-base ${isBrutalist ? 'text-[--accent-color] font-light' : 'text-[#FFD700] font-black'} shrink-0`}>{item.quantity}x</span>
+                                        <h3 className={`text-[15px] text-white leading-tight ${isBrutalist ? 'font-semibold tracking-tight' : 'font-bold'}`}>{item.name}</h3>
+                                        {item.isServed ? (
+                                            <span className="bg-purple-500/10 text-purple-500 text-[8px] font-bold px-2 py-0.5 rounded-full border border-purple-500/20 uppercase tracking-tighter">Entregado</span>
+                                        ) : item.isOriginal ? (
+                                            (() => {
+                                                const statuses = Object.values(item.kitchenStatus || {});
+                                                if (statuses.includes('ready')) return <span className="bg-green-500/10 text-green-500 text-[8px] font-bold px-2 py-0.5 rounded-full border border-green-500/20 uppercase tracking-tighter">Listo</span>;
+                                                if (statuses.includes('preparing')) return <span className="bg-amber-500/10 text-amber-500 text-[8px] font-bold px-2 py-0.5 rounded-full border border-amber-500/20 uppercase tracking-tighter">Preparando</span>;
+                                                return <span className="bg-blue-500/10 text-blue-500 text-[8px] font-bold px-2 py-0.5 rounded-full border border-blue-500/20 uppercase tracking-tighter">Enviado</span>;
+                                            })()
+                                        ) : (
+                                            <span className="bg-white/5 text-white/30 text-[8px] font-bold px-2 py-0.5 rounded-full border border-white/10 uppercase tracking-tighter">Nuevo</span>
+                                        )}
                                     </div>
                                     {item.selectedModifiers.length > 0 && (
-                                        <div className="mt-1 space-y-0.5">
+                                        <div className="mt-2 space-y-1 pl-7">
                                             {(() => {
                                                 const groups: Record<string, string[]> = {};
                                                 item.selectedModifiers.forEach(m => {
@@ -118,45 +147,67 @@ const CartScreen: React.FC<CartScreenProps> = (props) => {
                                                     groups[m.groupTitle].push(m.option.name);
                                                 });
                                                 return Object.entries(groups).map(([groupTitle, options]) => (
-                                                    <p key={groupTitle} className="text-[10px] text-gray-500 leading-tight">
-                                                        <span className="font-bold uppercase text-[8px] text-gray-400 mr-1">{groupTitle}:</span>
-                                                        {options.join(', ')}
+                                                    <p key={groupTitle} className="text-[10px] text-white/30 leading-tight">
+                                                        <span className="font-bold uppercase text-[8px] text-white/20 mr-2 tracking-widest">{groupTitle}:</span>
+                                                        <span className="font-medium text-white/50">{options.join(', ')}</span>
                                                     </p>
                                                 ));
                                             })()}
                                         </div>
                                     )}
+                                    {item.notes && (
+                                        <div className={`mt-4 p-3 rounded-2xl border flex gap-3 items-start ${isBrutalist ? 'bg-white/[0.02] border-white/5' : 'bg-red-500/5 border-red-500/10'}`}>
+                                            <span className="material-symbols-outlined text-sm text-[--brand-color] opacity-50">edit_note</span>
+                                            <p className={`text-[10px] leading-tight ${isBrutalist ? 'text-white/40 font-normal italic' : 'text-red-400 font-bold'}`}>"{item.notes}"</p>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="text-right">
-                                    <p className="font-black text-gray-900 leading-none text-base">${(unitPrice * item.quantity).toFixed(2)}</p>
-                                    <p className="text-xs font-bold text-gray-400">Bs. {((unitPrice * item.quantity) * activeRate).toFixed(2)}</p>
+                                    <p className={`leading-none text-lg ${isBrutalist ? 'text-white font-light tracking-tighter' : 'text-white font-black'}`}>
+                                        {isBrutalist ? (
+                                            <>
+                                                <span className="text-white/30 text-xs">$</span>
+                                                <span className="font-semibold">{Math.floor(unitPrice * item.quantity)}</span>
+                                                <span className="text-sm opacity-30">.{(((unitPrice * item.quantity) % 1) * 100).toFixed(0).padStart(2, '0')}</span>
+                                            </>
+                                        ) : `$${(unitPrice * item.quantity).toFixed(2)}`}
+                                    </p>
+                                    <p className="text-[9px] font-medium text-white/20 uppercase tracking-widest mt-1">Bs. {((unitPrice * item.quantity) * activeRate).toFixed(2)}</p>
                                 </div>
                             </div>
 
-                            <div className="flex justify-between items-center mt-3 border-t border-gray-50 pt-3">
+                            <div className={`flex justify-between items-center mt-5 pt-5 border-t ${isBrutalist ? 'border-white/5' : 'border-white/5'}`}>
                                 <div className="flex items-center gap-1">
-                                    <button onClick={() => onRemoveItem(item.id)} className={`text-[10px] ${isOriginal ? 'text-red-400 font-bold' : 'text-red-500 font-black'} uppercase tracking-widest px-2 py-1 rounded active:bg-red-50`}>
-                                        {isOriginal ? 'Borrar (PIN)' : 'Borrar'}
-                                    </button>
-                                    {!isOriginal && <button onClick={() => onEditItem(item.id)} className="text-[10px] text-blue-600 font-black uppercase tracking-widest px-2 py-1 rounded active:bg-blue-50">Editar</button>}
-                                    {isOriginal && <span className="text-[9px] font-bold text-amber-600 italic">Previamente enviado</span>}
+                                    {!isOriginalItem && (
+                                        <button onClick={() => onRemoveItem(item.id)} className={`text-[9px] uppercase tracking-[0.2em] px-3 py-2 rounded-xl active:scale-95 transition-all flex items-center gap-2 ${isBrutalist ? 'bg-white/5 text-white/30 hover:text-white/60' : 'text-red-500 font-black'}`}>
+                                            <span className="material-symbols-outlined text-[14px]">delete</span>
+                                            {item.isServed && !isAdmin ? 'Eliminar (PIN)' : 'Eliminar'}
+                                        </button>
+                                    )}
+                                    {!isOriginalItem && !item.isServed && (
+                                        <button onClick={() => onEditItem(item.id)} className={`text-[9px] uppercase tracking-[0.2em] px-3 py-2 rounded-xl active:scale-95 transition-all flex items-center gap-2 ${isBrutalist ? 'bg-white/5 text-white/30 hover:text-white/60' : 'text-blue-500 font-black'}`}>
+                                            <span className="material-symbols-outlined text-[14px]">edit</span>
+                                            Editar
+                                        </button>
+                                    )}
+                                    {isOriginalItem && <span className="text-[9px] font-black text-white/20 uppercase tracking-widest px-3 italic">Registro Bloqueado</span>}
                                 </div>
-                                <div className="flex items-center gap-3 bg-gray-50 rounded-lg p-1 border">
-                                    {isOriginal ? (
-                                        <>
-                                            <div className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-md text-gray-300 border border-gray-200">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                                            </div>
-                                            <span className="font-black text-gray-400 w-6 text-center text-sm">{item.quantity}</span>
-                                            <div className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-md text-gray-300 border border-gray-200">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                                            </div>
-                                        </>
+                                <div className={`flex items-center gap-4 p-1.5 rounded-2xl border border-white/5 ${isBrutalist ? 'bg-black/20' : 'bg-white/5'}`}>
+                                    {isLocked || isOriginalItem ? (
+                                        <div className="flex items-center gap-3 px-3">
+                                            <span className="material-symbols-outlined text-lg text-white/20">lock</span>
+                                            <span className={`font-medium text-white text-base ${isOriginalItem ? 'opacity-40' : ''}`}>{item.quantity}</span>
+                                            <span className="material-symbols-outlined text-lg text-white/20">lock</span>
+                                        </div>
                                     ) : (
                                         <>
-                                            <button onClick={() => onUpdateQuantity(item.id, item.quantity - 1)} className="w-8 h-8 flex items-center justify-center bg-white rounded-md shadow-sm text-gray-600 font-black active:bg-gray-100 border">-</button>
-                                            <span className="font-black text-gray-800 w-6 text-center text-sm">{item.quantity}</span>
-                                            <button onClick={() => onUpdateQuantity(item.id, item.quantity + 1)} className="w-8 h-8 flex items-center justify-center bg-white rounded-md shadow-sm text-gray-600 font-black active:bg-gray-100 border">+</button>
+                                            <button onClick={() => onUpdateQuantity(item.id, item.quantity - 1)} className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all active:scale-90 ${isBrutalist ? 'bg-white/5 text-white/40 hover:text-white border border-white/10' : 'bg-white rounded-md shadow-sm text-gray-600 font-black border'}`}>
+                                                <span className="material-symbols-outlined text-lg">remove</span>
+                                            </button>
+                                            <span className={`font-light text-white w-6 text-center text-base`}>{item.quantity}</span>
+                                            <button onClick={() => onUpdateQuantity(item.id, item.quantity + 1)} className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all active:scale-90 ${isBrutalist ? 'bg-gradient-to-br from-[#FFBF00] to-[#FFD700] text-black shadow-lg shadow-amber/20' : 'bg-white rounded-md shadow-sm text-gray-600 font-black border'}`}>
+                                                <span className="material-symbols-outlined text-lg">add</span>
+                                            </button>
                                         </>
                                     )}
                                 </div>
@@ -166,22 +217,40 @@ const CartScreen: React.FC<CartScreenProps> = (props) => {
                 })}
             </div>
 
-            <div className="flex-shrink-0 bg-white p-6 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-20 border-t">
-                <div className="flex justify-between items-center mb-6">
-                    <span className="text-gray-400 font-black uppercase tracking-widest text-xs">Total</span>
+            <div className={`flex-shrink-0 p-8 pt-6 pb-10 z-30 border-t relative overflow-hidden ${isBrutalist ? 'bg-[#121212]/95 backdrop-blur-2xl border-white/10' : 'bg-[#111] border-white/5'}`}>
+                <div className="flex justify-between items-center mb-8 relative z-10">
+                    <div className="flex flex-col gap-1">
+                        <span className="text-white/30 font-semibold uppercase tracking-[0.3em] text-[10px]">Total de Cuenta</span>
+                        <p className="text-[10px] font-medium text-white/10 uppercase tracking-[0.4em] transition-all">Impuestos incluidos</p>
+                    </div>
                     <div className="text-right">
-                        <span className="text-3xl font-black text-gray-900 leading-none">${total.toFixed(2)}</span>
-                        <p className="text-sm font-bold text-gray-500">Bs. {(total * activeRate).toFixed(2)}</p>
+                        <div className="flex items-baseline gap-1 justify-end">
+                            <span className="text-white/20 text-sm font-light tracking-wider">$</span>
+                            <span className={`text-4xl leading-none transition-all ${isBrutalist ? 'text-white font-light tracking-tighter' : 'text-white font-black'}`}>
+                                {isBrutalist ? (
+                                    <>
+                                        <span className="font-semibold">{Math.floor(total)}</span>
+                                        <span className="text-2xl opacity-30">.{((total % 1) * 100).toFixed(0).padStart(2, '0')}</span>
+                                    </>
+                                ) : total.toFixed(2)}
+                            </span>
+                        </div>
+                        <p className="text-[11px] font-medium text-white/20 uppercase tracking-widest mt-2 leading-none">Bs. {(total * activeRate).toFixed(2)}</p>
                     </div>
                 </div>
 
                 {onGoToCheckout && (
                     <button
                         onClick={onGoToCheckout}
-                        className={`w-full ${isEditing ? 'bg-green-600 shadow-green-100' : 'bg-red-600 shadow-red-100'} text-white py-4 rounded-xl font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all flex justify-between px-6 items-center`}
+                        className={`group relative w-full h-16 rounded-[2.2rem] font-bold uppercase tracking-[0.35em] text-[10px] shadow-2xl active:scale-95 transition-all flex items-center justify-center overflow-hidden z-10 ${isEditing ? 'text-white' : 'text-white'}`}
                     >
-                        <span>{isEditing ? 'Ir a Cobrar' : 'Continuar'}</span>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                        <div className={`absolute inset-0 transition-transform group-hover:scale-110 ${isBrutalist ? 'bg-gradient-to-br from-[#DC143C] to-[#FF2400]' : (isEditing ? 'bg-green-600' : 'bg-[var(--brand-color)]')}`}></div>
+                        <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <div className="relative flex items-center justify-center gap-4">
+                            <span>{isEditing ? 'Confirmar Pago' : 'Proceder al Pago'}</span>
+                            <span className="material-symbols-outlined text-xl">keyboard_double_arrow_right</span>
+                        </div>
+                        {isBrutalist && <div className="absolute inset-0 shadow-[0_0_30px_rgba(220,20,60,0.4)] opacity-50"></div>}
                     </button>
                 )}
             </div>

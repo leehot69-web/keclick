@@ -45,6 +45,7 @@ const StoreProfileEditor: React.FC<{
   const [isMenuModalOpen, setMenuModalOpen] = useState(false);
   const themes: { name: ThemeName, label: string }[] = [
     { name: 'keclick', label: 'Keclick' },
+    { name: 'brutalist', label: 'BRUTAL' },
     { name: 'manga', label: 'Manga' },
     { name: 'red', label: 'Rojo' },
     { name: 'blue', label: 'Azul' },

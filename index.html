@@ -16,8 +16,9 @@
   <meta name="mobile-web-app-capable" content="yes">
 
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+    rel="stylesheet" />
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap"
     rel="stylesheet">
 
@@ -151,6 +152,142 @@
       border-radius: 0px !important;
       /* Estilo vectorial suele ser más cuadrado */
       transition: all 0.15s ease;
+    }
+
+    /* TEMA BRUTALISTA (MODERN CYBER-GLASS) */
+    body.theme-brutalist {
+      --brand-color: #DC143C;
+      /* Crimson */
+      --brand-color-dark: #FF2400;
+      /* Scarlet */
+      --accent-color: #FFD700;
+      /* Gold */
+      --page-bg-color: #121212;
+      --glass-bg: rgba(255, 255, 255, 0.03);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --red-gradient: linear-gradient(135deg, #DC143C, #FF2400);
+      --yellow-gradient: linear-gradient(135deg, #FFBF00, #FFD700);
+      background-color: #121212 !important;
+      color: #FFFFFF;
+      font-family: 'Inter', 'Montserrat', sans-serif;
+    }
+
+    /* Fondo con esferas de luz fija */
+    body.theme-brutalist::before {
+      content: "";
+      position: fixed;
+      top: -10%;
+      left: -10%;
+      width: 40%;
+      height: 40%;
+      background: rgba(220, 20, 60, 0.05);
+      filter: blur(120px);
+      -webkit-filter: blur(120px);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    body.theme-brutalist::after {
+      content: "";
+      position: fixed;
+      bottom: -10%;
+      right: -10%;
+      width: 40%;
+      height: 40%;
+      background: rgba(255, 191, 0, 0.05);
+      filter: blur(120px);
+      -webkit-filter: blur(120px);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    body.theme-brutalist .bg-white,
+    body.theme-brutalist .bg-gray-50,
+    body.theme-brutalist .bg-gray-100 {
+      background: var(--glass-bg) !important;
+      backdrop-filter: blur(12px) !important;
+      -webkit-backdrop-filter: blur(12px) !important;
+      border: 1px solid var(--glass-border) !important;
+      color: white !important;
+      border-radius: 1.5rem !important;
+    }
+
+    body.theme-brutalist .brutalist-card {
+      background: var(--glass-bg) !important;
+      backdrop-filter: blur(12px) !important;
+      border: 1px solid var(--glass-border) !important;
+      border-radius: 1.5rem !important;
+    }
+
+    body.theme-brutalist h1,
+    body.theme-brutalist h2,
+    body.theme-brutalist h3 {
+      font-weight: 700 !important;
+      letter-spacing: -0.02em;
+      color: #FFFFFF !important;
+    }
+
+    body.theme-brutalist button {
+      border-radius: 1rem !important;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    body.theme-brutalist .btn-primary {
+      background: var(--red-gradient) !important;
+      box-shadow: 0 0 15px rgba(220, 20, 60, 0.3) !important;
+      border: none !important;
+    }
+
+    body.theme-brutalist .bg-red-600 {
+      background: var(--red-gradient) !important;
+      border: none !important;
+    }
+
+    body.theme-brutalist .text-gray-800,
+    body.theme-brutalist .text-gray-900,
+    body.theme-brutalist .text-gray-700,
+    body.theme-brutalist .text-black {
+      color: rgba(255, 255, 255, 0.9) !important;
+    }
+
+    body.theme-brutalist .text-gray-500,
+    body.theme-brutalist .text-gray-400 {
+      color: rgba(255, 255, 255, 0.4) !important;
+      text-transform: uppercase !important;
+      font-weight: 500 !important;
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+    }
+
+    body.theme-brutalist .border,
+    body.theme-brutalist .border-gray-100,
+    body.theme-brutalist .border-gray-200 {
+      border-color: var(--glass-border) !important;
+    }
+
+    body.theme-brutalist .bg-pos-gold,
+    body.theme-brutalist .bg-amber-400 {
+      background: var(--yellow-gradient) !important;
+      color: #000 !important;
+      box-shadow: 0 0 15px rgba(255, 191, 0, 0.3) !important;
+    }
+
+    body.theme-brutalist .item-qty {
+      color: #FFBF00 !important;
+      font-weight: 700 !important;
+    }
+
+    body.theme-brutalist .total-amount {
+      background: var(--red-gradient);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-size: 3.5rem !important;
+      font-weight: 800 !important;
+      letter-spacing: -0.05em;
+      filter: drop-shadow(0 0 10px rgba(220, 20, 60, 0.3));
     }
 
     body.theme-manga button:hover {
