@@ -5,6 +5,7 @@ import MenuItemFormModal from './MenuItemFormModal';
 import CategoryFormModal from './CategoryFormModal';
 import ModifierGroupFormModal from './ModifierGroupFormModal';
 import PizzaIngredientFormModal from './PizzaIngredientFormModal';
+import { CLEAN_MENU_TEMPLATE } from '../constants';
 
 interface MenuManagementModalProps {
   menu: MenuCategory[];
@@ -265,6 +266,14 @@ const MenuManagementModal: React.FC<MenuManagementModalProps> = (props) => {
     }
   };
 
+  const handleResetToCleanTemplate = () => {
+    if (confirm('¿Estás seguro de que quieres limpiar todo el menú actual y empezar con la plantilla básica? Esta acción no se puede deshacer hasta que guardes.')) {
+      setLocalMenu(CLEAN_MENU_TEMPLATE);
+      setLocalModifierGroups([]);
+      alert('Se ha cargado la plantilla limpia. Recuerda "Guardar y Publicar" para aplicar los cambios a la nube.');
+    }
+  };
+
 
   return (
     <>
@@ -281,7 +290,10 @@ const MenuManagementModal: React.FC<MenuManagementModalProps> = (props) => {
             <div className="space-y-6">
               <div className="flex items-center justify-between border-b pb-2">
                 <h2 className="text-xl font-bold text-gray-800">Categorías y Productos</h2>
-                <button onClick={handleAddNewCategory} className="px-4 py-2 text-xs font-black uppercase tracking-widest bg-gray-900 text-white rounded-lg">+ Categoría</button>
+                <div className="flex gap-2">
+                  <button onClick={handleResetToCleanTemplate} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest bg-red-50 text-red-600 border border-red-100 rounded-lg hover:bg-red-100 transition-all">🧹 Limpiar Todo</button>
+                  <button onClick={handleAddNewCategory} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest bg-gray-900 text-white rounded-lg">+ Categoría</button>
+                </div>
               </div>
               {localMenu.map(category => (
                 <div key={category.title} className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
