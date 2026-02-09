@@ -182,6 +182,7 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
 
         setStores(mappedStores);
         setIsLoading(false);
+        return mappedStores;
     };
 
     useEffect(() => {
@@ -225,9 +226,10 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
             .eq('store_id', storeId);
 
         if (!error) {
-            setStores(prev => prev.map(s => s.id === storeId ? { ...s, menuSource: newSource } : s));
-            if (selectedStore?.id === storeId) {
-                setSelectedStore(prev => prev ? { ...prev, menuSource: newSource } : null);
+            const updatedStores = await fetchStores(); // Refresh all store data (menu content depends on source)
+            if (selectedStore?.id === storeId && updatedStores) {
+                const refreshedStore = updatedStores.find(s => s.id === storeId);
+                if (refreshedStore) setSelectedStore(refreshedStore);
             }
         } else {
             alert("Error al cambiar fuente de menú: " + error.message);
