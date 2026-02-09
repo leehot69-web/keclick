@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import MenuManagementModal from './MenuManagementModal';
 import { MenuCategory, ModifierGroup, PizzaIngredient } from '../types';
-import { KECLICK_MENU_DATA, KECLICK_MODIFIERS, PIZZA_BASE_PRICES, PIZZA_INGREDIENTS } from '../constants';
+import { KECLICK_MENU_DATA, KECLICK_MODIFIERS, PIZZA_BASE_PRICES, PIZZA_INGREDIENTS, CLEAN_MENU_TEMPLATE } from '../constants';
 import { supabase } from '../utils/supabase';
 
 // --- ESTRUCTURA DE PLANES ---
@@ -119,10 +119,10 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
                 const { data: items } = await supabase.from('menu_items').select('*').eq('store_id', s.id);
                 const { data: mods } = await supabase.from('modifier_groups').select('*').eq('store_id', s.id);
 
-                if (cats && cats.length > 0 && items) {
+                if (cats && cats.length > 0) {
                     realMenu = cats.map(c => ({
                         title: c.title,
-                        items: items.filter(i => i.category_id === c.id).map(i => ({
+                        items: (items || []).filter(i => i.category_id === c.id).map(i => ({
                             name: i.name,
                             price: parseFloat(i.price),
                             available: i.available,
@@ -137,6 +137,8 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
                             modifierGroupTitles: i.modifier_group_titles
                         }))
                     }));
+                } else {
+                    realMenu = CLEAN_MENU_TEMPLATE;
                 }
 
                 if (mods && mods.length > 0) {
@@ -149,6 +151,8 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
                         freeSelectionCount: m.free_selection_count,
                         extraPrice: m.extra_price
                     }));
+                } else {
+                    realMods = [];
                 }
             }
 

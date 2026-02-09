@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '../utils/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { AppSettings, SaleRecord, DayClosure, StoreProfile, MenuCategory, ModifierGroup } from '../types';
-import { KECLICK_MENU_DATA, KECLICK_MODIFIERS } from '../constants';
+import { KECLICK_MENU_DATA, KECLICK_MODIFIERS, CLEAN_MENU_TEMPLATE } from '../constants';
 
 export const useSupabaseSync = (
     settings: AppSettings,
@@ -178,8 +178,9 @@ export const useSupabaseSync = (
             }
 
             // Sincronizar Menú (Reconstruir estructura de categorías)
+            let finishedMenu = [];
             if (remoteCategories && remoteCategories.length > 0 && remoteItems) {
-                const fullMenu = remoteCategories.map(cat => {
+                finishedMenu = remoteCategories.map(cat => {
                     const catItems = remoteItems
                         .filter(item => item.category_id === cat.id)
                         .map(item => ({
@@ -201,13 +202,16 @@ export const useSupabaseSync = (
                         items: catItems
                     };
                 });
+            } else {
+                // Si es real pero está vacío, usamos el template limpio
+                finishedMenu = CLEAN_MENU_TEMPLATE;
+            }
 
-                const currentMenuStr = JSON.stringify(menu);
-                const newMenuStr = JSON.stringify(fullMenu);
-                if (currentMenuStr !== newMenuStr) {
-                    console.log('✨ [SYNC] Menú dinámico actualizado.');
-                    setMenu(fullMenu);
-                }
+            const currentMenuStr = JSON.stringify(menu);
+            const newMenuStr = JSON.stringify(finishedMenu);
+            if (currentMenuStr !== newMenuStr) {
+                console.log('✨ [SYNC] Menú dinámico actualizado.');
+                setMenu(finishedMenu);
             }
 
             setSyncStatus(prev => prev === 'offline' ? 'polling' : prev);

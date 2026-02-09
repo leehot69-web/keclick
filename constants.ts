@@ -346,3 +346,14 @@ export const KECLICK_MENU_DATA: MenuCategory[] = [
     ]
   }
 ];
+
+export const CLEAN_MENU_TEMPLATE: MenuCategory[] = [
+  {
+    title: 'ENTRADAS',
+    items: []
+  },
+  {
+    title: 'PLATOS PRINCIPALES',
+    items: []
+  }
+];
