@@ -226,6 +226,7 @@ export interface AppSettings {
   isWhatsAppEnabled: boolean; // Interruptor para envío a cocina
   waitersCanCharge: boolean;
   kitchenStations: KitchenStation[];
+  menuSource?: 'demo' | 'real';
 }
 
 // Estación de cocina (ej: Plancha, Horno, Bebidas)

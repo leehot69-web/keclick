@@ -48,6 +48,7 @@ interface ManagedStore {
     modifierGroups?: ModifierGroup[];
     pizzaIngredients?: PizzaIngredient[];
     pizzaBasePrices?: Record<string, number>;
+    menuSource?: 'demo' | 'real';
 }
 
 interface MasterAppProps {
@@ -107,41 +108,49 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
                 .eq('store_id', s.id);
             const totalSales = salesData?.reduce((acc, curr) => acc + (curr.total || 0), 0) || 0;
 
-            // 2. Obtener Menú Real (NUEVAS TABLAS)
-            const { data: cats } = await supabase.from('menu_categories').select('*').eq('store_id', s.id).order('order_index');
-            const { data: items } = await supabase.from('menu_items').select('*').eq('store_id', s.id);
-            const { data: mods } = await supabase.from('modifier_groups').select('*').eq('store_id', s.id);
+            const menuSource = s.settings?.menu_source || 'demo';
 
-            let realMenu = s.settings?.menu || KECLICK_MENU_DATA;
-            if (cats && cats.length > 0 && items) {
-                realMenu = cats.map(c => ({
-                    title: c.title,
-                    items: items.filter(i => i.category_id === c.id).map(i => ({
-                        name: i.name,
-                        price: parseFloat(i.price),
-                        available: i.available,
-                        description: i.description,
-                        image: i.image,
-                        isPizza: i.is_pizza,
-                        isSpecialPizza: i.is_special_pizza,
-                        defaultIngredients: i.default_ingredients,
-                        isCombo: i.is_combo,
-                        comboIncludes: i.combo_includes,
-                        kitchenStations: i.kitchen_stations,
-                        modifierGroupTitles: i.modifier_group_titles
-                    }))
-                }));
+            // 2. Obtener Menú Real (NUEVAS TABLAS - SOLO SI NO ES DEMO)
+            let realMenu = KECLICK_MENU_DATA;
+            let realMods = KECLICK_MODIFIERS;
+
+            if (menuSource === 'real') {
+                const { data: cats } = await supabase.from('menu_categories').select('*').eq('store_id', s.id).order('order_index');
+                const { data: items } = await supabase.from('menu_items').select('*').eq('store_id', s.id);
+                const { data: mods } = await supabase.from('modifier_groups').select('*').eq('store_id', s.id);
+
+                if (cats && cats.length > 0 && items) {
+                    realMenu = cats.map(c => ({
+                        title: c.title,
+                        items: items.filter(i => i.category_id === c.id).map(i => ({
+                            name: i.name,
+                            price: parseFloat(i.price),
+                            available: i.available,
+                            description: i.description,
+                            image: i.image,
+                            isPizza: i.is_pizza,
+                            isSpecialPizza: i.is_special_pizza,
+                            defaultIngredients: i.default_ingredients,
+                            isCombo: i.is_combo,
+                            comboIncludes: i.combo_includes,
+                            kitchenStations: i.kitchen_stations,
+                            modifierGroupTitles: i.modifier_group_titles
+                        }))
+                    }));
+                }
+
+                if (mods && mods.length > 0) {
+                    realMods = mods.map(m => ({
+                        title: m.title,
+                        selectionType: m.selection_type,
+                        minSelection: m.min_selection,
+                        maxSelection: m.max_selection,
+                        options: m.options,
+                        freeSelectionCount: m.free_selection_count,
+                        extraPrice: m.extra_price
+                    }));
+                }
             }
-
-            const realMods = mods && mods.length > 0 ? mods.map(m => ({
-                title: m.title,
-                selectionType: m.selection_type,
-                minSelection: m.min_selection,
-                maxSelection: m.max_selection,
-                options: m.options,
-                freeSelectionCount: m.free_selection_count,
-                extraPrice: m.extra_price
-            })) : (s.settings?.modifier_groups || KECLICK_MODIFIERS);
 
             return {
                 id: s.id,
@@ -160,6 +169,7 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
                 fixedFee: 0,
                 menu: realMenu,
                 modifierGroups: realMods,
+                menuSource: menuSource as 'demo' | 'real',
                 users: s.settings?.users || []
             };
         }));
@@ -194,6 +204,27 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
             setStores(prev => prev.map(s => s.id === storeId ? { ...s, status: newStatus } : s));
         } else {
             alert("Error al cambiar status: " + error.message);
+        }
+    };
+
+    const toggleMenuSource = async (storeId: string) => {
+        const store = stores.find(s => s.id === storeId);
+        if (!store) return;
+
+        const newSource = store.menuSource === 'demo' ? 'real' : 'demo';
+
+        const { error } = await supabase
+            .from('settings')
+            .update({ menu_source: newSource })
+            .eq('store_id', storeId);
+
+        if (!error) {
+            setStores(prev => prev.map(s => s.id === storeId ? { ...s, menuSource: newSource } : s));
+            if (selectedStore?.id === storeId) {
+                setSelectedStore(prev => prev ? { ...prev, menuSource: newSource } : null);
+            }
+        } else {
+            alert("Error al cambiar fuente de menú: " + error.message);
         }
     };
 
@@ -719,6 +750,19 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                         Gestionar Menú de Nave
                                     </button>
+
+                                    <div className="flex items-center justify-between p-4 bg-white/5 border border-white/5 rounded-2xl">
+                                        <div>
+                                            <p className="text-[8px] font-black text-gray-500 uppercase">Fuente de Menú</p>
+                                            <p className="text-xs font-black uppercase text-white">{selectedStore.menuSource === 'demo' ? '🚀 Modo Demo AI' : '📂 Menú Personalizado'}</p>
+                                        </div>
+                                        <button
+                                            onClick={() => toggleMenuSource(selectedStore.id)}
+                                            className={`px-4 py-2 rounded-xl font-black uppercase text-[9px] transition-all ${selectedStore.menuSource === 'demo' ? 'bg-amber-500 text-black' : 'bg-blue-600 text-white'}`}
+                                        >
+                                            {selectedStore.menuSource === 'demo' ? 'Pasar a Real' : 'Pasar a Demo'}
+                                        </button>
+                                    </div>
 
                                     <div className="border-t border-white/5 my-4"></div>
 

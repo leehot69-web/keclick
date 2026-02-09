@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '../utils/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { AppSettings, SaleRecord, DayClosure, StoreProfile, MenuCategory, ModifierGroup } from '../types';
+import { KECLICK_MENU_DATA, KECLICK_MODIFIERS } from '../constants';
 
 export const useSupabaseSync = (
     settings: AppSettings,
@@ -110,22 +111,37 @@ export const useSupabaseSync = (
                 .single();
 
             if (settingsData) {
+                const updatedStatus = {
+                    ...settingsData,
+                    storeId: settingsData.store_id,
+                    kitchenStations: settingsData.kitchen_stations,
+                    users: settingsData.users,
+                    menuSource: settingsData.menu_source || 'demo'
+                };
+
                 setSettings(prev => {
-                    const updated = {
-                        ...prev,
-                        ...settingsData,
-                        storeId: settingsData.store_id,
-                        kitchenStations: settingsData.kitchen_stations,
-                        users: settingsData.users
-                    };
-                    if (JSON.stringify(prev) !== JSON.stringify(updated)) {
-                        return updated;
-                    }
+                    const current = JSON.stringify(prev);
+                    const next = JSON.stringify({ ...prev, ...updatedStatus });
+                    if (current !== next) return { ...prev, ...updatedStatus };
                     return prev;
                 });
+
+                // Si está en MODO DEMO, forzar el menú de las constantes
+                if (updatedStatus.menuSource === 'demo') {
+                    if (JSON.stringify(menu) !== JSON.stringify(KECLICK_MENU_DATA)) {
+                        console.log('🛰️ [SYNC] Modo DEMO activo: Aplicando Menú Estándar.');
+                        setMenu(KECLICK_MENU_DATA);
+                    }
+                    if (JSON.stringify(modifierGroups) !== JSON.stringify(KECLICK_MODIFIERS)) {
+                        setModifierGroups(KECLICK_MODIFIERS);
+                    }
+                    // Saltar el resto del fetch de menú
+                    setSyncStatus(prev => prev === 'offline' ? 'polling' : prev);
+                    return;
+                }
             }
 
-            // 4. Menu & Modifiers (NUEVAS TABLAS)
+            // 4. Menu & Modifiers (NUEVAS TABLAS - SOLO SI NO ES DEMO)
             const { data: remoteCategories } = await supabase
                 .from('menu_categories')
                 .select('*')

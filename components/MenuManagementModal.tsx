@@ -265,32 +265,6 @@ const MenuManagementModal: React.FC<MenuManagementModalProps> = (props) => {
     }
   };
 
-  const handleLoadTestData = () => {
-    const testBurgerCategory: MenuCategory = {
-      title: "🍔 PRUEBAS AI",
-      items: [
-        {
-          name: "Hamburguesa Monster AI",
-          price: 12.5,
-          available: true,
-          description: "Doble carne, triple queso, tocino y salsa secreta de Antigravity.",
-          kitchenStations: ["general"],
-          modifierGroupTitles: []
-        },
-        {
-          name: "Papas Fritas XL",
-          price: 4.0,
-          available: true,
-          description: "Crocantes y saladas.",
-          kitchenStations: ["general"],
-          modifierGroupTitles: []
-        }
-      ]
-    };
-
-    setLocalMenu(prev => [testBurgerCategory, ...prev]);
-    alert('Se ha añadido la categoría "PRUEBAS AI" al inicio de tu menú local. Dale a "Guardar Todo" o "Publicar en la Nube".');
-  };
 
   return (
     <>
@@ -402,12 +376,6 @@ const MenuManagementModal: React.FC<MenuManagementModalProps> = (props) => {
 
           <div className="mt-6 pt-4 border-t border-gray-100 flex-shrink-0 flex flex-col gap-3">
             <div className="flex gap-4">
-              <button
-                onClick={handleLoadTestData}
-                className="flex-1 py-3 bg-amber-500/10 text-amber-600 border border-amber-500/20 font-black uppercase tracking-widest text-[10px] rounded-xl hover:bg-amber-500/20 transition-all"
-              >
-                🎁 Cargar Hamburguesa Prueba
-              </button>
               {syncMenu && (
                 <button
                   onClick={handleCloudSync}
