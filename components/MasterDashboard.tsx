@@ -79,6 +79,7 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onClose, onSelectStor
                 name: newStoreName,
                 owner_phone: newStorePhone,
                 owner_name: newOwnerName,
+                owner_email: newEmail,
                 status: 'trial',
                 trial_ends_at: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000).toISOString()
             });

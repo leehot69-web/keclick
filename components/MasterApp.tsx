@@ -148,7 +148,7 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
                 name: s.name,
                 ownerPhone: s.owner_phone || '',
                 ownerName: s.owner_name || '',
-                email: 'PENDIENTE',
+                email: s.owner_email || 'N/A',
                 status: s.status as any,
                 activationDate: s.created_at?.split('T')[0] || '',
                 expiryDate: s.trial_ends_at?.split('T')[0] || '',
@@ -212,6 +212,7 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
                 name: newStoreName,
                 owner_phone: newStorePhone,
                 owner_name: newOwnerName,
+                owner_email: newEmail,
                 status: 'trial',
                 trial_ends_at: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000).toISOString()
             });
