@@ -213,6 +213,10 @@ function App() {
     setMenu,
     modifierGroups,
     setModifierGroups,
+    pizzaIngredients,
+    setPizzaIngredients,
+    pizzaBasePrices,
+    setPizzaBasePrices,
     settings.storeId === 'NEW_STORE' ? null : settings.storeId
   );
 

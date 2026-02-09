@@ -174,6 +174,8 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
                 menu: realMenu,
                 modifierGroups: realMods,
                 menuSource: menuSource as 'demo' | 'real',
+                pizzaIngredients: s.settings?.pizza_ingredients || PIZZA_INGREDIENTS,
+                pizzaBasePrices: s.settings?.pizza_base_prices || PIZZA_BASE_PRICES,
                 users: s.settings?.users || []
             };
         }));
@@ -825,12 +827,31 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
                             setIsLoading(false);
                         }
                     }}
-                    onUpdatePizzaConfig={(newIngs, newPrices) => {
-                        setStores(prev => prev.map(s => s.id === selectedStore.id ? {
-                            ...s,
-                            pizzaIngredients: newIngs,
-                            pizzaBasePrices: newPrices
-                        } : s));
+                    onUpdatePizzaConfig={async (newIngs, newPrices) => {
+                        try {
+                            if (!selectedStore) return;
+
+                            // 1. Update local state
+                            setStores(prev => prev.map(s => s.id === selectedStore.id ? {
+                                ...s,
+                                pizzaIngredients: newIngs,
+                                pizzaBasePrices: newPrices
+                            } : s));
+
+                            // 2. Persist to Supabase Settings
+                            const { error } = await supabase
+                                .from('settings')
+                                .update({
+                                    pizza_ingredients: newIngs,
+                                    pizza_base_prices: newPrices
+                                })
+                                .eq('store_id', selectedStore.id);
+
+                            if (error) throw error;
+                            console.log("🍕 [KeMaster] Configuración de pizza persistida.");
+                        } catch (err: any) {
+                            alert("❌ Error al persistir configuración de pizza: " + err.message);
+                        }
                     }}
                     syncMenu={syncMenu}
                 />

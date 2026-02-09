@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '../utils/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
-import { AppSettings, SaleRecord, DayClosure, StoreProfile, MenuCategory, ModifierGroup } from '../types';
+import { AppSettings, SaleRecord, DayClosure, StoreProfile, MenuCategory, ModifierGroup, PizzaIngredient } from '../types';
 import { KECLICK_MENU_DATA, KECLICK_MODIFIERS, CLEAN_MENU_TEMPLATE } from '../constants';
 
 export const useSupabaseSync = (
@@ -15,6 +15,10 @@ export const useSupabaseSync = (
     setMenu: (m: any[] | ((prev: any[]) => any[])) => void,
     modifierGroups: any[],
     setModifierGroups: (m: any[] | ((prev: any[]) => any[])) => void,
+    pizzaIngredients: PizzaIngredient[],
+    setPizzaIngredients: (p: PizzaIngredient[] | ((prev: PizzaIngredient[]) => PizzaIngredient[])) => void,
+    pizzaBasePrices: Record<string, number>,
+    setPizzaBasePrices: (p: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void,
     currentStoreId: string | null
 ) => {
     const [syncStatus, setSyncStatus] = useState<'connecting' | 'online' | 'offline' | 'polling'>('connecting');
@@ -125,6 +129,22 @@ export const useSupabaseSync = (
                     if (current !== next) return { ...prev, ...updatedStatus };
                     return prev;
                 });
+
+                // Sincronizar Configuración de Pizza
+                if (settingsData.pizza_ingredients) {
+                    const newIngs = settingsData.pizza_ingredients;
+                    if (JSON.stringify(pizzaIngredients) !== JSON.stringify(newIngs)) {
+                        console.log('🍕 [SYNC] Ingredientes de pizza actualizados.');
+                        setPizzaIngredients(newIngs);
+                    }
+                }
+                if (settingsData.pizza_base_prices) {
+                    const newPrices = settingsData.pizza_base_prices;
+                    if (JSON.stringify(pizzaBasePrices) !== JSON.stringify(newPrices)) {
+                        console.log('🍕 [SYNC] Precios base de pizza actualizados.');
+                        setPizzaBasePrices(newPrices);
+                    }
+                }
 
                 // Si está en MODO DEMO, forzar el menú de las constantes
                 if (updatedStatus.menuSource === 'demo') {
