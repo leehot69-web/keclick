@@ -365,6 +365,15 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
             .eq('id', selectedStore.id);
 
         if (!error) {
+            // REPARACIÓN QUIRÚRGICA: Sincronizar también la tabla 'settings' para activar la licencia en la App
+            await supabase
+                .from('settings')
+                .update({
+                    is_license_active: true,
+                    license_expiry_date: futureDate.toISOString()
+                })
+                .eq('store_id', selectedStore.id);
+
             setStores(prev => prev.map(s => s.id === selectedStore.id ? {
                 ...s,
                 status: 'active',
@@ -501,7 +510,12 @@ const MasterApp: React.FC<MasterAppProps> = ({ onClose, onSelectStore }) => {
                 </div>
                 <h1 className="text-xl font-black tracking-widest italic mb-8 uppercase">Ke<span className="text-[#FFD700]">Master</span></h1>
                 <input type="password" value={pin} onChange={(e) => setPin(e.target.value)} placeholder="PIN CRÍTICO" className="bg-[#111] border border-white/5 p-4 rounded-xl text-center text-xl w-48 font-black outline-none focus:border-[#FF0000] mb-6 shadow-inner" />
-                <button onClick={handleLogin} className="bg-[#FF0000] px-10 py-4 rounded-xl font-black uppercase text-xs tracking-[0.3em] shadow-lg hover:scale-105 transition-all">Autorizar Sistemas</button>
+                <button onClick={handleLogin} className="bg-[#FF0000] px-10 py-4 rounded-xl font-black uppercase text-xs tracking-[0.3em] shadow-lg hover:scale-105 transition-all mb-8">Autorizar Sistemas</button>
+                {onClose && (
+                    <button onClick={onClose} className="text-[10px] font-black uppercase text-gray-600 hover:text-white transition-colors tracking-widest">
+                        Cerrar Escotilla
+                    </button>
+                )}
             </div>
         );
     }

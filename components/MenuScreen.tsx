@@ -35,12 +35,22 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
 }) => {
     const [activeCategory, setActiveCategory] = useState<string | null>(menu[0]?.title || null);
     const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
 
     const scrollToCategory = (title: string) => {
         setActiveCategory(title);
         const element = categoryRefs.current[title];
-        if (element) {
-            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const container = scrollContainerRef.current;
+        if (element && container) {
+            // Cálculo manual de la posición para no depender de 'relative'
+            const containerTop = container.getBoundingClientRect().top;
+            const elementTop = element.getBoundingClientRect().top;
+            const scrollPos = container.scrollTop + (elementTop - containerTop) - 20;
+
+            container.scrollTo({
+                top: scrollPos,
+                behavior: 'smooth'
+            });
         }
     };
 
@@ -135,7 +145,10 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
             </div>
 
             {/* Listado de Productos */}
-            <div className={`flex-grow overflow-y-auto scroll-smooth scrollbar-hide ${!isPosMode ? 'pb-24' : 'pb-4'}`}>
+            <div
+                ref={scrollContainerRef}
+                className={`flex-grow overflow-y-auto scroll-smooth scrollbar-hide ${!isPosMode ? 'pb-24' : 'pb-4'}`}
+            >
                 <div className="max-w-7xl mx-auto p-4 lg:p-8">
                     {menu.map(category => (
                         <div key={category.title} ref={el => { categoryRefs.current[category.title] = el; }} className="mb-14">

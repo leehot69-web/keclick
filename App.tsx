@@ -662,9 +662,21 @@ function App() {
     <>
       {(() => {
         if (isSubscriptionInactive) return (
-          <div className="fixed inset-0 z-[1000] bg-black flex flex-col items-center justify-center p-8 text-center">
+          <div
+            onContextMenu={(e) => { e.preventDefault(); setShowMasterDashboard(true); }}
+            className="fixed inset-0 z-[1000] bg-black flex flex-col items-center justify-center p-8 text-center"
+          >
             <h2 className="text-3xl font-black text-white mb-4">VENCIDO</h2>
-            <button onClick={() => window.location.reload()} className="px-8 py-4 bg-red-600 text-white rounded-xl">REFRESCAR</button>
+            <button
+              onClick={() => {
+                // Forzamos limpieza de caché local para obligar a re-validar con Supabase
+                localStorage.removeItem('app_settings_v3');
+                window.location.reload();
+              }}
+              className="px-8 py-4 bg-red-600 text-white rounded-xl active:scale-95 transition-all shadow-lg font-black uppercase tracking-widest"
+            >
+              REFRESCAR
+            </button>
           </div>
         );
 

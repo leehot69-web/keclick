@@ -26,7 +26,7 @@ const RegistrationScreen: React.FC<RegistrationScreenProps> = ({ onRegister, onJ
                 onRegister(name, phone);
             } else if (mode === 'join') {
                 if (!joinId) throw new Error('Ingresa un código de tienda');
-                const success = await onJoin(joinId.toUpperCase());
+                const success = await onJoin(joinId.toUpperCase().trim());
                 if (!success) throw new Error('Código de tienda no encontrado');
             } else if (mode === 'recover') {
                 if (!phone) throw new Error('Ingresa el teléfono registrado');
