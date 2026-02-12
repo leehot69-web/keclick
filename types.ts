@@ -109,6 +109,7 @@ export interface CartItem {
 
 export interface CustomerDetails {
   name: string;
+  tableNumber?: number;
   phone?: string;
   paymentMethod: string;
   instructions?: string;
@@ -239,19 +240,56 @@ export interface KitchenStation {
   name: string;
   color: string; // Color para identificar visualmente
 }
+// Gastos (Salidas de caja)
+export interface ExpenseRecord {
+  id: string;
+  storeId: string;
+  amount: number;
+  description: string;
+  category: string;
+  date: string;
+  time: string;
+  user: string;
+}
+
+// Ingresos Extras / Inyecciones (Entradas de caja que no son ventas)
+export interface CashInjectionRecord {
+  id: string;
+  storeId: string;
+  amount: number;
+  description: string;
+  date: string;
+  time: string;
+  user: string;
+}
+
+// Reconciliación (Arqueo)
+export interface CashReconciliation {
+  openingBalance: number;
+  cashSales: number;
+  otherSales: number; // Zelle, Tarjeta, etc.
+  addedCash: number;
+  totalSystemSales: number;
+  expenses: number;
+  cashCounted: number;
+  discrepancy: number;
+  notes: string;
+}
+
 // Registro de cierre de caja/turno
 export interface DayClosure {
   id: string;
   storeId: string;
   date: string;
-  closedAt: string; // ISO timestamp del momento del cierre
-  closedBy: string; // Nombre del usuario que cerró
-  isAdminClosure: boolean; // Si fue cierre de admin (global) o de mesero individual
+  closedAt: string; // ISO timestamp
+  closedBy: string;
+  isAdminClosure: boolean;
   totalPaid: number;
   totalPending: number;
   totalVoided: number;
   salesCount: number;
-  reportIds: string[]; // IDs de las ventas incluidas en este cierre
+  reportIds: string[];
+  reconciliation?: CashReconciliation; // Data del arqueo físico
 }
 
 export type WaiterAssignments = Record<string, number[]>;

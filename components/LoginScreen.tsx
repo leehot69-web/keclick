@@ -50,7 +50,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, businessName,
       {/* Logo y Nombre */}
       <div className="mb-10 text-center animate-in fade-in slide-in-from-top duration-700">
         <div className="inline-block p-4 bg-white/10 backdrop-blur-md rounded-3xl mb-4 border border-white/20 shadow-2xl">
-          <img src={businessLogo || "https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=2070&auto=format&fit=crop"} alt="Logo" className="h-20 w-20 object-contain rounded-2xl" />
+          <img src={businessLogo || "https://i.imgur.com/8bfbsEL.png"} alt="Logo" className="h-20 w-20 object-contain rounded-2xl" />
         </div>
         <h1 className="text-4xl font-black text-white italic tracking-tighter uppercase drop-shadow-lg">{businessName}</h1>
         <p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.3em] mt-2">Acceso de Personal</p>

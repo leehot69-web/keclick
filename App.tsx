@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, MenuItem, StoreProfile, CartItem, CustomerDetails, SelectedModifier, MenuCategory, ModifierGroup, AppSettings, SaleRecord, ThemeName, PizzaConfiguration, PizzaIngredient, PizzaSize, User, DayClosure, UserRole } from './types';
+import { View, MenuItem, StoreProfile, CartItem, CustomerDetails, SelectedModifier, MenuCategory, ModifierGroup, AppSettings, SaleRecord, ThemeName, PizzaConfiguration, PizzaIngredient, PizzaSize, User, DayClosure, UserRole, ExpenseRecord, CashInjectionRecord } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseSync } from './hooks/useSupabaseSync';
 import { KECLICK_MENU_DATA, KECLICK_MODIFIERS, PIZZA_BASE_PRICES, PIZZA_INGREDIENTS } from './constants';
@@ -23,6 +23,7 @@ import AdminDashboard from './components/AdminDashboard';
 import KitchenScreen from './components/KitchenScreen';
 import RegistrationScreen from './components/RegistrationScreen';
 import MasterApp from './components/MasterApp';
+import FloorPlanScreen from './components/FloorPlanScreen';
 import { supabase } from './utils/supabase';
 import { useSessionStorage } from './hooks/useSessionStorage';
 
@@ -35,16 +36,18 @@ function App() {
   const [businessName, setBusinessName] = useLocalStorage<string>('app_business_name_v1', 'Keclick');
   const [pizzaIngredients, setPizzaIngredients] = useLocalStorage<PizzaIngredient[]>('app_pizza_ingredients_v1', PIZZA_INGREDIENTS);
   const [pizzaBasePrices, setPizzaBasePrices] = useLocalStorage<Record<string, number>>('app_pizza_base_prices_v1', PIZZA_BASE_PRICES);
-  const businessLogo = "https://i.ibb.co/9HxvMhx/keclick-logo.png"; // Placeholder image but we'll use CSS mostly
+  const businessLogo = "https://i.imgur.com/8bfbsEL.png";
 
   // CAMBIO CRÍTICO: Usar SessionStorage para permitir múltiples sesiones en diferentes pestañas
   const [currentUser, setCurrentUser] = useSessionStorage<User | null>('app_current_user_v1', null);
+  // Ref para trackear inicio de sesión y evitar logout por cierres previos
+  const loginTimestampRef = React.useRef<number>(Date.now());
   const [removalReasons, setRemovalReasons] = useState<Record<string, string>>({});
 
   const [settings, setSettings] = useLocalStorage<AppSettings>('app_settings_v3', {
     storeId: 'NEW_STORE',
     businessName: 'Keclick',
-    businessLogo: 'https://i.ibb.co/9HxvMhx/keclick-logo.png',
+    businessLogo: 'https://i.imgur.com/8bfbsEL.png',
     totalTables: 20,
     printerPaperWidth: '58mm',
     exchangeRateBCV: 36.5,
@@ -129,7 +132,20 @@ function App() {
   const [editingCartItemId, setEditingCartItemId] = useState<string | null>(null);
   const [isSalesHistoryModalOpen, setIsSalesHistoryModalOpen] = useState(false);
   const [isConfirmOrderModalOpen, setConfirmOrderModalOpen] = useState(false);
+  const [pendingReopenOrderId, setPendingReopenOrderId] = useState<string | null>(null);
   const [pendingVoidReportId, setPendingVoidReportId] = useState<string | null>(null);
+  const [viewOnlyReport, setViewOnlyReport] = useState<SaleRecord | null>(null);
+  const [expenses, setExpenses] = useLocalStorage<ExpenseRecord[]>('app_expenses', []);
+  const [injections, setInjections] = useLocalStorage<CashInjectionRecord[]>('app_injections', []);
+
+  const executeReopenOrder = async () => {
+    const target = reports.find(r => r.id === pendingReopenOrderId);
+    if (!target) return;
+    const updated = { ...target, notes: 'PENDIENTE', total: target.total };
+    setReports(reports.map(r => r.id === pendingReopenOrderId ? updated : r));
+    setPendingReopenOrderId(null);
+    await safeSyncSale(updated);
+  };
   const [showMasterDashboard, setShowMasterDashboard] = useState(false);
 
   useEffect(() => {
@@ -202,21 +218,13 @@ function App() {
     return { id: data.id, name: data.name };
   };
 
-  const { syncSale, safeSyncSale, syncSettings, syncClosure, syncMenu, refreshData, syncStatus, lastSyncTime, forceRenderCount } = useSupabaseSync(
-    settings,
-    setSettings,
-    reports,
-    setReports,
-    dayClosures,
-    setDayClosures,
-    menu,
-    setMenu,
-    modifierGroups,
-    setModifierGroups,
-    pizzaIngredients,
-    setPizzaIngredients,
-    pizzaBasePrices,
-    setPizzaBasePrices,
+  const {
+    syncSale, safeSyncSale, syncSettings, syncClosure, syncExpense, syncInjection, syncMenu,
+    refreshData, syncStatus, lastSyncTime, forceRenderCount
+  } = useSupabaseSync(
+    settings, setSettings, reports, setReports, dayClosures, setDayClosures,
+    menu, setMenu, modifierGroups, setModifierGroups, pizzaIngredients, setPizzaIngredients,
+    pizzaBasePrices, setPizzaBasePrices, expenses, setExpenses, injections, setInjections,
     settings.storeId === 'NEW_STORE' ? null : settings.storeId
   );
 
@@ -244,12 +252,19 @@ function App() {
     const today = new Date().toISOString().split('T')[0];
     const latestClosure = dayClosures[0];
     if (latestClosure && latestClosure.date === today) {
-      if (latestClosure.isAdminClosure || latestClosure.closedBy === currentUser.name) {
-        handleLogout();
-        alert("La jornada ha sido cerrada por administración o desde otro dispositivo. Sesión finalizada.");
+      // SOLO cerrar sesión si el cierre ocurrió DESPUÉS de que el usuario inició sesión
+      // Esto permite "reabrir" operaciones o iniciar un nuevo turno tras un cierre
+      const closureTime = new Date(latestClosure.closedAt).getTime();
+      const loginTime = loginTimestampRef.current;
+
+      if (closureTime > loginTime) {
+        if (latestClosure.isAdminClosure || latestClosure.closedBy === currentUser.name) {
+          handleLogout();
+          alert("La jornada ha sido cerrada por administración o desde otro dispositivo. Sesión finalizada.");
+        }
       }
     }
-  }, [dayClosures]);
+  }, [dayClosures, currentUser]);
 
   const readyPlatesDetails = React.useMemo(() => {
     if (!currentUser) return [];
@@ -424,17 +439,36 @@ function App() {
   };
 
   const handleEditPendingReport = (report: SaleRecord, target: View = 'cart') => {
+    // SEGURIDAD QUIRÚRGICA: Impedir entrada a edición si ya está pagado
+    if (report.notes !== 'PENDIENTE') {
+      alert("TRANSACCIÓN BLOQUEADA: Este pedido ya ha sido procesado como PAGADO. No se permiten ediciones para evitar errores de cobro duplicado.");
+      return;
+    }
+
     setCart((report.order as CartItem[]).map(i => ({ ...i, isOriginal: true, notes: 'original' })));
-    setCustomerDetails({ name: report.customerName || '', phone: report.customerPhone || '', paymentMethod: 'Efectivo', instructions: report.instructions || '' });
+    setCustomerDetails({
+      name: report.customerName || '',
+      tableNumber: report.tableNumber,
+      phone: report.customerPhone || '',
+      paymentMethod: 'Efectivo',
+      instructions: report.instructions || ''
+    });
     setEditingReportId(report.id);
     setCurrentView(target);
   };
 
   const handleVoidReport = (id: string) => setPendingVoidReportId(id);
-  const executeVoidReport = async () => {
+  const executeVoidReport = async (reason: string = 'ANULACION MANUAL') => {
     const target = reports.find(r => r.id === pendingVoidReportId);
     if (!target) return;
-    const updated = { ...target, notes: 'ANULADO', total: 0, type: 'refund' as const, _pendingSync: true };
+    const updated: SaleRecord = {
+      ...target,
+      notes: 'ANULADO',
+      total: 0,
+      type: 'refund' as const,
+      _pendingSync: true,
+      instructions: `ANULADO POR ${currentUser?.name || 'ADMIN'}: ${reason}`
+    };
     setReports(prev => prev.map(r => r.id === pendingVoidReportId ? updated : r));
     setPendingVoidReportId(null);
     const res = await safeSyncSale(updated);
@@ -442,6 +476,35 @@ function App() {
       setReports(prev => prev.map(r => r.id === target.id ? { ...r, _pendingSync: undefined } : r));
       if (res.errorType === 'conflict') refreshData();
     }
+  };
+
+  const handleAddExpense = (amount: number, description: string, category: string) => {
+    const newExpense: ExpenseRecord = {
+      id: Math.random().toString(36).substr(2, 9),
+      storeId: settings.storeId,
+      amount,
+      description,
+      category,
+      date: new Date().toISOString().split('T')[0],
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      user: currentUser?.name || 'Admin'
+    };
+    setExpenses(prev => [newExpense, ...prev]);
+    syncExpense(newExpense);
+  };
+
+  const handleAddInjection = (amount: number, description: string) => {
+    const newInjection: CashInjectionRecord = {
+      id: Math.random().toString(36).substr(2, 9),
+      storeId: settings.storeId,
+      amount,
+      description,
+      date: new Date().toISOString().split('T')[0],
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      user: currentUser?.name || 'Admin'
+    };
+    setInjections(prev => [newInjection, ...prev]);
+    syncInjection(newInjection);
   };
 
   const handleLogout = () => { setCurrentUser(null); setCart([]); setCurrentView('menu'); };
@@ -592,9 +655,9 @@ function App() {
     const rep: SaleRecord = {
       id: ex?.id || Math.random().toString(36).substr(2, 9),
       storeId: settings.storeId,
-      date: new Date().toISOString().split('T')[0],
+      date: new Date().toLocaleDateString('en-CA'),
       time: new Date().toLocaleTimeString(),
-      tableNumber: parseInt(customerDetails.name) || 0,
+      tableNumber: customerDetails.tableNumber || parseInt(customerDetails.name) || 0,
       waiter: ex ? ex.waiter : (currentUser?.name || 'Sistema'),
       total: tot,
       order: validatedCart,
@@ -677,8 +740,65 @@ function App() {
             >
               REFRESCAR
             </button>
+            <button
+              onClick={() => {
+                if (window.confirm("¿Deseas desvincular esta terminal para ingresar un nuevo código?")) {
+                  localStorage.clear();
+                  window.location.reload();
+                }
+              }}
+              className="mt-20 text-[8px] font-black text-gray-800 uppercase tracking-[0.4em] opacity-30 hover:opacity-100 transition-opacity"
+            >
+              Desvincular Terminal
+            </button>
           </div>
         );
+
+        const handleDeleteAllData = async () => {
+          if (!settings.storeId) return;
+          if (!window.confirm("⚠️ ¿ESTÁS SEGURO?\n\nEsta acción eliminará PERMANENTEMENTE todo el historial de ventas, cierres, gastos e ingresos de la nube.\n\nNO SE PUEDE DESHACER.")) return;
+
+          // Doble confirmación
+          const confirmText = prompt("Para confirmar, escribe BORRAR TODO en mayúsculas:");
+          if (confirmText !== "BORRAR TODO") {
+            alert("Operación cancelada. El texto no coincide.");
+            return;
+          }
+
+          try {
+            // 1. Borrar Ventas
+            const { error: errSales } = await supabase.from('sales').delete().eq('store_id', settings.storeId);
+            if (errSales) throw new Error('Error borrando ventas: ' + errSales.message);
+
+            // 2. Borrar Cierres
+            const { error: errClosures } = await supabase.from('day_closures').delete().eq('store_id', settings.storeId);
+            if (errClosures) throw new Error('Error borrando cierres: ' + errClosures.message);
+
+            // 3. Borrar Gastos
+            const { error: errExpenses } = await supabase.from('expenses').delete().eq('store_id', settings.storeId);
+            if (errExpenses) throw new Error('Error borrando gastos: ' + errExpenses.message);
+
+            // 4. Borrar Inyecciones
+            const { error: errInjections } = await supabase.from('cash_injections').delete().eq('store_id', settings.storeId);
+            if (errInjections) throw new Error('Error borrando inyecciones: ' + errInjections.message);
+
+            // 5. Limpiar estado local
+            setReports([]);
+            setDayClosures([]);
+            setExpenses([]);
+            setInjections([]);
+            handleClearCart();
+
+            alert("✅ Base de datos reseteada correctamente.");
+
+            // Forzar recarga para asegurar sincronización limpia
+            window.location.reload();
+
+          } catch (err: any) {
+            console.error("❌ Error al borrar datos:", err);
+            alert(`Error al borrar datos: ${err.message}`);
+          }
+        };
 
         if (settings.storeId === 'NEW_STORE') return (
           <div
@@ -708,6 +828,7 @@ function App() {
                 businessLogo={businessLogo}
                 onLogin={(u) => {
                   setCurrentUser(u);
+                  loginTimestampRef.current = Date.now(); // Resetear timestamp al hacer login explícito
                   if (u.role === 'cocinero') setCurrentView('kitchen');
                 }}
               />
@@ -722,11 +843,73 @@ function App() {
                 <div className="flex-1 overflow-hidden relative">
                   {(() => {
                     switch (currentView) {
-                      case 'menu': return <MenuScreen menu={menu} cart={cart} onAddItem={handleAddItem} onUpdateQuantity={handleUpdateQuantity} onRemoveItem={handleRemoveItem} onClearCart={handleClearCart} cartItemCount={cart.reduce((a, i) => a + i.quantity, 0)} onOpenModifierModal={setModifierModalItem} onOpenPizzaBuilder={setPizzaBuilderItem} onGoToCart={() => setCurrentView('cart')} businessName={businessName} businessLogo={businessLogo} triggerShake={triggerCartShake} showInstallButton={showInstallBtn} onInstallApp={handleInstallClick} activeRate={activeRate} isEditing={!!editingReportId} theme={theme} />;
+                      case 'menu': return <MenuScreen
+                        menu={menu}
+                        cart={cart}
+                        onAddItem={handleAddItem}
+                        onUpdateQuantity={handleUpdateQuantity}
+                        onRemoveItem={handleRemoveItem}
+                        onClearCart={handleClearCart}
+                        cartItemCount={cart.reduce((a, i) => a + i.quantity, 0)}
+                        onOpenModifierModal={setModifierModalItem}
+                        onOpenPizzaBuilder={setPizzaBuilderItem}
+                        onGoToCart={() => setCurrentView('cart')}
+                        businessName={businessName}
+                        businessLogo={businessLogo}
+                        triggerShake={triggerCartShake}
+                        showInstallButton={showInstallBtn}
+                        onInstallApp={handleInstallClick}
+                        activeRate={activeRate}
+                        isEditing={!!editingReportId}
+                        theme={theme}
+                        readyPlatesDetails={readyPlatesDetails}
+                        preparingPlatesDetails={preparingPlatesDetails}
+                        onMarkAllServed={handleMarkAllServed}
+                      />;
                       case 'cart': return <CartScreen cart={cart} onUpdateQuantity={handleUpdateQuantity} onRemoveItem={handleRemoveItem} onClearCart={handleClearCart} onBackToMenu={() => setCurrentView('menu')} onGoToCheckout={() => setCurrentView('checkout')} onEditItem={(id) => { const item = cart.find(i => i.id === id); if (item) { setEditingCartItemId(id); for (const cat of menu) { const orig = cat.items.find(i => i.name === item.name); if (orig) { setModifierModalItem(orig); break; } } } }} activeRate={activeRate} isEditing={!!editingReportId} isAdmin={currentUser?.role === 'admin'} theme={theme} />;
                       case 'checkout': return <CheckoutScreen cart={cart} customerDetails={customerDetails} paymentMethods={['Efectivo', 'Pago Móvil', 'Zelle', 'Divisas']} onUpdateDetails={setCustomerDetails} onBack={() => setCurrentView('cart')} onSubmitOrder={() => setConfirmOrderModalOpen(true)} onEditUserDetails={handleLogout} onClearCart={handleClearCart} activeRate={activeRate} isEditing={!!editingReportId} theme={theme} settings={settings} />;
-                      case 'reports': return <ReportsScreen reports={reports} dayClosures={dayClosures} onGoToTables={() => setCurrentView('menu')} onDeleteReports={(ids) => { setReports(p => p.filter(r => !ids.includes(r.id))); return true; }} settings={settings} onStartNewDay={handleStartNewDay} currentWaiter={currentUser?.name || ''} onOpenSalesHistory={() => setIsSalesHistoryModalOpen(true)} onReprintSaleRecord={handleReprintSaleRecord} isPrinterConnected={isPrinterConnected} onEditPendingReport={handleEditPendingReport} onVoidReport={handleVoidReport} isAdmin={currentUser?.role === 'admin'} forceRenderCount={forceRenderCount} theme={theme} />;
-                      case 'dashboard': return <AdminDashboard reports={reports} settings={settings} onGoToView={(v) => setCurrentView(v)} onEditOrder={handleEditPendingReport} onVoidOrder={handleVoidReport} onReprintOrder={handlePrintOrder} isPrinterConnected={isPrinterConnected} forceRenderCount={forceRenderCount} theme={theme} />;
+                      case 'reports': return <ReportsScreen
+                        reports={reports}
+                        dayClosures={dayClosures}
+                        onGoToTables={() => setCurrentView('menu')}
+                        onDeleteReports={(ids) => { setReports(p => p.filter(r => !ids.includes(r.id))); return true; }}
+                        settings={settings}
+                        onStartNewDay={handleStartNewDay}
+                        currentWaiter={currentUser?.name || ''}
+                        onOpenSalesHistory={() => setIsSalesHistoryModalOpen(true)}
+                        onReprintSaleRecord={handleReprintSaleRecord}
+                        isPrinterConnected={isPrinterConnected}
+                        onEditPendingReport={handleEditPendingReport}
+                        onVoidReport={(id, reason) => {
+                          setPendingVoidReportId(id);
+                          executeVoidReport(reason);
+                        }}
+                        onShowFloorPlan={() => setCurrentView('floorplan')}
+                        isAdmin={currentUser?.role === 'admin'}
+                        forceRenderCount={forceRenderCount}
+                        theme={theme}
+                        expenses={expenses}
+                        injections={injections}
+                        onAddExpense={handleAddExpense}
+                        onAddInjection={handleAddInjection}
+                      />;
+                      case 'dashboard': return <AdminDashboard
+                        reports={reports}
+                        settings={settings}
+                        onGoToView={(v) => setCurrentView(v)}
+                        onEditOrder={handleEditPendingReport}
+                        onVoidOrder={handleVoidReport}
+                        onReprintOrder={handlePrintOrder}
+                        isPrinterConnected={isPrinterConnected}
+                        forceRenderCount={forceRenderCount}
+                        theme={theme}
+                        expenses={expenses}
+                        injections={injections}
+                        onAddExpense={handleAddExpense}
+                        onAddInjection={handleAddInjection}
+                        dayClosures={dayClosures}
+                        onStartNewDay={handleStartNewDay}
+                      />;
                       case 'settings': return <SettingsScreen
                         settings={settings}
                         onSaveSettings={(s) => { setSettings(s); syncSettings(s as AppSettings); }}
@@ -747,7 +930,7 @@ function App() {
                         }}
                         activeTableNumbers={[]}
                         onBackupAllSalesData={() => { }}
-                        onClearAllSalesData={() => { if (window.confirm("¿Borrar historial?")) setReports([]); }}
+                        onClearAllSalesData={handleDeleteAllData}
                         syncMenu={syncMenu}
                         isPrinterConnected={isPrinterConnected}
                         onConnectPrinter={handleConnectPrinter}
@@ -759,6 +942,42 @@ function App() {
                         onUpdatePizzaConfig={(i, b) => { setPizzaIngredients(i); setPizzaBasePrices(b); }}
                         onResetApp={() => { if (window.confirm("¿Cerrar negocio?")) { setSettings(p => ({ ...p, storeId: 'NEW_STORE' })); handleLogout(); } }}
                       />;
+                      case 'floorplan': return <FloorPlanScreen
+                        reports={reports}
+                        settings={settings}
+                        forceRenderCount={forceRenderCount}
+                        onGoBack={() => setCurrentView('reports')}
+                        onEditOrder={(order) => handleEditPendingReport(order, 'menu')}
+                        onViewOrder={(order) => setViewOnlyReport(order)}
+                        onSelectTable={(num) => {
+                          setCustomerDetails({ ...customerDetails, name: num.toString(), tableNumber: num });
+                          handleClearCart();
+                          setCurrentView('menu');
+                        }}
+                        onReopenOrder={(rid) => {
+                          const target = reports.find(r => r.id === rid);
+                          if (!target) return;
+
+                          // Si es admin, puede reabrir directo (opcional, o pedir PIN siempre por seguridad)
+                          if (currentUser?.role === 'admin') {
+                            if (window.confirm("¿Reabrir este pedido como administrador?")) {
+                              setPendingReopenOrderId(rid);
+                              executeReopenOrder();
+                            }
+                          } else {
+                            // Si es mesero/cajero, requiere PIN de admin
+                            setPendingReopenOrderId(rid);
+                          }
+                        }}
+                        onCloseOrder={async (rid) => {
+                          const target = reports.find(r => r.id === rid);
+                          if (target) {
+                            const updated = { ...target, closed: true };
+                            setReports(reports.map(r => r.id === rid ? updated : r));
+                            await safeSyncSale(updated);
+                          }
+                        }}
+                      />;
                       case 'kitchen': return <KitchenScreen reports={reports} settings={settings} currentUser={currentUser} onUpdateItemStatus={async (rid, iid, sid, status) => { const updated = reports.map(r => r.id === rid ? { ...r, order: r.order.map((i: any) => i.id === iid ? { ...i, kitchenStatus: { ...(i.kitchenStatus || {}), [sid]: status } } : i) } : r); setReports(updated); const rep = updated.find(r => r.id === rid); if (rep) await safeSyncSale(rep); }} onCloseOrder={async (rid) => { if (window.confirm("¿Cerrar comanda?")) { const target = reports.find(r => r.id === rid); if (target) { const up = { ...target, closed: true }; setReports(reports.map(r => r.id === rid ? up : r)); await safeSyncSale(up); } } }} onLogout={handleLogout} onManualSync={handleManualSync} syncStatus={syncStatus} lastSyncTime={lastSyncTime} forceRenderCount={forceRenderCount} />;
                       case 'success': return <SuccessScreen cart={lastSoldRecord?.cart || []} customerDetails={lastSoldRecord?.details || customerDetails} onStartNewOrder={handleStartNewOrder} onReprint={() => handlePrintOrder(undefined, true)} isPrinterConnected={isPrinterConnected} activeRate={activeRate} theme={theme} settings={settings} />;
                       default: return null;
@@ -768,7 +987,7 @@ function App() {
 
                 {currentUser.role !== 'cocinero' && (
                   <>
-                    {hasPreparingPlates && currentView !== 'kitchen' && (
+                    {hasPreparingPlates && currentView !== 'kitchen' && currentView !== 'menu' && (
                       <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 px-6 py-2 rounded-full shadow-lg font-black text-[10px] uppercase tracking-widest z-50 flex items-center gap-2 animate-pulse border-2 border-yellow-500 overflow-hidden max-w-[80vw]">
                         <span className="w-2 h-2 bg-yellow-600 rounded-full animate-ping shrink-0"></span>
                         <div className="animate-marquee whitespace-nowrap">
@@ -776,7 +995,7 @@ function App() {
                         </div>
                       </div>
                     )}
-                    {hasReadyPlates && currentView !== 'kitchen' && (
+                    {hasReadyPlates && currentView !== 'kitchen' && currentView !== 'menu' && (
                       <div className="absolute top-4 left-4 right-4 bg-green-600 text-white py-2 px-4 shadow-xl rounded-2xl z-[110] border border-green-500 flex items-center justify-between gap-3 box-border">
                         <div className="flex-1 overflow-hidden flex items-center gap-3">
                           <span className="flex h-5 w-5 items-center justify-center bg-white text-green-600 rounded-full shrink-0"><svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg></span>
@@ -862,9 +1081,71 @@ function App() {
       {isConfirmOrderModalOpen && <ConfirmOrderModal isOpen={isConfirmOrderModalOpen} onClose={() => setConfirmOrderModalOpen(false)} isPrinterConnected={isPrinterConnected} isEdit={!!editingReportId} onConfirmPrintAndSend={async () => { if (isPrinterConnected) await handlePrintOrder(); executeSendToWhatsapp(); finalizeOrder(true); setConfirmOrderModalOpen(false); }} onConfirmPrintOnly={async () => { if (isPrinterConnected) await handlePrintOrder(); finalizeOrder(true); setConfirmOrderModalOpen(false); }} onConfirmSendOnly={() => { executeSendToWhatsapp(); finalizeOrder(true); setConfirmOrderModalOpen(false); }} onConfirmSendUnpaid={async () => { if (isPrinterConnected) await handlePrintOrder("POR COBRAR"); executeSendToWhatsapp(true); finalizeOrder(false); setConfirmOrderModalOpen(false); }} userRole={currentUser?.role} waitersCanCharge={settings.waitersCanCharge} />}
       {isSalesHistoryModalOpen && <SalesHistoryModal reports={reports} onClose={() => setIsSalesHistoryModalOpen(false)} />}
       {pendingVoidReportId && <AdminAuthModal validPins={settings.users.filter(u => u.role === 'admin').map(u => u.pin)} onClose={() => setPendingVoidReportId(null)} onSuccess={executeVoidReport} title="Anular Ticket" />}
+      {pendingReopenOrderId && <AdminAuthModal validPins={settings.users.filter(u => u.role === 'admin').map(u => u.pin)} onClose={() => setPendingReopenOrderId(null)} onSuccess={executeReopenOrder} title="Reabrir Pedido" />}
       {isAdminAuthForClearCart && <AdminAuthModal validPins={settings.users.filter(u => u.role === 'admin').map(u => u.pin)} onClose={() => setIsAdminAuthForClearCart(false)} onSuccess={executeClearCart} title="Limpiar Pedido" />}
       {pendingRemoveItemId && <AdminAuthModal validPins={settings.users.filter(u => u.role === 'admin').map(u => u.pin)} onClose={() => setPendingRemoveItemId(null)} onSuccess={executeRemoveItem} title="Eliminar Producto" requireReason={!!cart.find(i => i.id === pendingRemoveItemId)?.isServed} />}
       {showInstallModal && <InstallPromptModal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} onInstall={triggerNativeInstall} platform={platform} />}
+
+      {/* Visualización de Pedido Pagado (Solo Lectura) */}
+      {viewOnlyReport && (
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-xl flex items-center justify-center z-[9999] p-4" onClick={() => setViewOnlyReport(null)}>
+          <div className="bg-[#111] border border-white/10 rounded-[40px] p-8 w-full max-w-sm shadow-2xl overflow-hidden relative" onClick={e => e.stopPropagation()}>
+            <div className="absolute top-0 right-0 p-6">
+              <button onClick={() => setViewOnlyReport(null)} className="text-white/20 hover:text-white transition-colors">
+                <span className="material-symbols-outlined text-3xl">close</span>
+              </button>
+            </div>
+
+            <h3 className="text-2xl font-black uppercase tracking-tighter text-white mb-8 italic flex items-center gap-3">
+              <span className="w-2 h-8 bg-[#0bda19] rounded-full"></span>
+              Resumen de Mesa
+            </h3>
+
+            <div className="space-y-5 mb-8 max-h-[45vh] overflow-y-auto pr-2 scrollbar-hide">
+              <div className="flex items-center gap-4 mb-6 p-5 bg-[#0bda19]/5 rounded-[2rem] border border-[#0bda19]/20">
+                <div className="w-12 h-12 bg-[#0bda19]/20 rounded-2xl flex items-center justify-center text-[#0bda19] shadow-[0_0_20px_rgba(11,218,25,0.2)]">
+                  <span className="material-symbols-outlined text-2xl font-bold">verified</span>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] leading-none mb-1.5">Estado Final</p>
+                  <p className="text-sm font-black text-[#0bda19] uppercase tracking-tighter">PAGADO COMPLETAMENTE</p>
+                </div>
+              </div>
+
+              {(viewOnlyReport.order || []).map((item: any, idx) => (
+                <div key={idx} className="pb-4 border-b border-white/5 last:border-0">
+                  <div className="flex justify-between items-start mb-1">
+                    <span className="text-sm font-black text-white/90 leading-tight pr-4">{item.quantity}x {item.name}</span>
+                    <span className="text-base font-black text-white font-mono shrink-0">${((item.price || 0) * (item.quantity || 0)).toFixed(2)}</span>
+                  </div>
+                  {item.selectedModifiers?.map((m: any, mi: number) => (
+                    <p key={mi} className="text-[10px] text-white/30 italic ml-4 font-bold flex items-center gap-1">
+                      <span className="w-1 h-1 bg-white/20 rounded-full"></span>
+                      {m.groupTitle}: {m.option.name}
+                    </p>
+                  ))}
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-6 border-t border-white/10 flex justify-between items-end mb-8">
+              <div>
+                <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em] mb-1">Total Transacción</p>
+                <p className="text-3xl font-black text-[#0bda19] font-mono tracking-tighter shadow-sm">${(viewOnlyReport.total || 0).toFixed(2)}</p>
+              </div>
+              <p className="text-[10px] font-black text-white/10 uppercase mb-1">USD</p>
+            </div>
+
+            <button
+              onClick={() => { handleReprintSaleRecord(viewOnlyReport); setViewOnlyReport(null); }}
+              className="w-full py-5 bg-white text-black font-black rounded-3xl shadow-2xl shadow-white/5 uppercase tracking-[0.2em] active:scale-95 transition-all text-xs flex items-center justify-center gap-3"
+            >
+              <span className="material-symbols-outlined text-xl">print</span>
+              Re-imprimir Ticket
+            </button>
+          </div>
+        </div>
+      )}
       {receiptToPrint && (
         <div id="printable-area" className="hidden print:block p-8 bg-white text-black font-mono">
           <div className="text-center text-xl font-bold mb-4 uppercase border-b-2 border-black pb-2">{businessName}</div>

@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '../utils/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
-import { AppSettings, SaleRecord, DayClosure, StoreProfile, MenuCategory, ModifierGroup, PizzaIngredient } from '../types';
+import { AppSettings, SaleRecord, DayClosure, StoreProfile, MenuCategory, ModifierGroup, PizzaIngredient, ExpenseRecord, CashInjectionRecord } from '../types';
 import { KECLICK_MENU_DATA, KECLICK_MODIFIERS, CLEAN_MENU_TEMPLATE } from '../constants';
 
 export const useSupabaseSync = (
@@ -19,6 +19,10 @@ export const useSupabaseSync = (
     setPizzaIngredients: (p: PizzaIngredient[] | ((prev: PizzaIngredient[]) => PizzaIngredient[])) => void,
     pizzaBasePrices: Record<string, number>,
     setPizzaBasePrices: (p: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void,
+    expenses: ExpenseRecord[],
+    setExpenses: (e: ExpenseRecord[] | ((prev: ExpenseRecord[]) => ExpenseRecord[])) => void,
+    injections: CashInjectionRecord[],
+    setInjections: (i: CashInjectionRecord[] | ((prev: CashInjectionRecord[]) => CashInjectionRecord[])) => void,
     currentStoreId: string | null
 ) => {
     const [syncStatus, setSyncStatus] = useState<'connecting' | 'online' | 'offline' | 'polling'>('connecting');
@@ -71,25 +75,38 @@ export const useSupabaseSync = (
             if (salesError) throw salesError;
 
             if (salesData) {
+                // ESTRATEGIA DE SINCRONIZACIÓN ESTRICTA:
+                // Si la base de datos dice que hay X registros, el cliente debe mostrar X registros.
+                // Eliminamos la lógica de fusión compleja que mantenía registros "fantasmas" locales.
                 const sales = salesData as any[];
-                setReports((prev: SaleRecord[]) => {
-                    const pendingMap = new Map<string, SaleRecord>(prev.filter(p => p._pendingSync).map(p => [p.id, p]));
-                    const remoteMapped: SaleRecord[] = sales.map(mapSaleFromSupabase);
-                    const merged = remoteMapped.map(r => pendingMap.get(r.id) || r);
-                    const remoteIds = new Set(remoteMapped.map(r => r.id));
-                    const newLocals = prev.filter(p => p._pendingSync && !remoteIds.has(p.id));
-                    const finalReports: SaleRecord[] = [...newLocals, ...merged];
+                const mappedSales = sales.map(mapSaleFromSupabase);
+
+                setReports(prev => {
+                    // Mantenemos SOLO los que tienen _pendingSync (cambios locales no subidos)
+                    // que NO estén ya en la respuesta del servidor (para evitar duplicados)
+                    const pendingLocals = prev.filter(p => p._pendingSync && !mappedSales.find(r => r.id === p.id));
+
+                    const newReports = [...pendingLocals, ...mappedSales];
+
+                    // Si la longitud cambió drásticamente (ej: borrado masivo), forzar actualización
+                    if (prev.length > 0 && newReports.length === 0) {
+                        console.log('🧹 [SYNC] Base de datos vacía detectada. Limpiando local.');
+                        return [];
+                    }
 
                     const currentDataStr = JSON.stringify(prev);
-                    const newDataStr = JSON.stringify(finalReports);
+                    const newDataStr = JSON.stringify(newReports);
 
                     if (currentDataStr !== newDataStr) {
-                        console.log('✨ [SYNC] Datos de ventas actualizados.');
+                        console.log('✨ [SYNC] Datos de ventas sincronizados (Sobreescritura Autoritativa).');
                         forceUIUpdate();
-                        return finalReports;
+                        return newReports;
                     }
                     return prev;
                 });
+            } else {
+                // Si salesData es null o vacío y no hubo error, asumimos que no hay ventas
+                setReports([]);
             }
 
             // Cierres
@@ -100,11 +117,69 @@ export const useSupabaseSync = (
                 .order('closed_at', { ascending: false });
 
             if (closuresData) {
-                setDayClosures(closuresData.map(c => ({
-                    ...c,
+                // Sincronización Estricta para Cierres
+                const mappedClosures = closuresData.map(c => ({
+                    id: c.id,
                     storeId: c.store_id,
-                    reportIds: c.report_ids
-                })));
+                    date: c.date,
+                    closedAt: c.closed_at,
+                    closedBy: c.closed_by,
+                    isAdminClosure: c.is_admin_closure,
+                    totalPaid: c.total_paid,
+                    totalPending: c.total_pending,
+                    totalVoided: c.total_voided,
+                    salesCount: c.sales_count,
+                    reportIds: c.report_ids,
+                    reconciliation: c.reconciliation_data
+                }));
+
+                setDayClosures(prev => {
+                    const current = JSON.stringify(prev);
+                    const next = JSON.stringify(mappedClosures);
+                    if (current !== next) {
+                        console.log('✨ [SYNC] Cierres sincronizados (Sobreescritura).');
+                        return mappedClosures;
+                    }
+                    return prev;
+                });
+            } else {
+                setDayClosures([]);
+            }
+
+            // Gastos
+            const { data: expensesData } = await supabase
+                .from('expenses')
+                .select('*')
+                .eq('store_id', currentStoreId)
+                .order('date', { ascending: false })
+                .limit(100);
+
+            if (expensesData) {
+                const mappedExpenses = expensesData.map(e => ({ ...e, storeId: e.store_id }));
+                setExpenses(prev => {
+                    if (JSON.stringify(prev) !== JSON.stringify(mappedExpenses)) return mappedExpenses;
+                    return prev;
+                });
+            } else {
+                setExpenses([]);
+            }
+
+            // Inyecciones
+            const { data: injectionsData } = await supabase
+                .from('cash_injections')
+                .select('*')
+                .eq('store_id', currentStoreId)
+                .order('date', { ascending: false })
+                .limit(100);
+
+            if (injectionsData) {
+                const mappedInjections = injectionsData.map(i => ({ ...i, storeId: i.store_id }));
+                setInjections(prev => {
+                    if (JSON.stringify(prev) !== JSON.stringify(mappedInjections)) return mappedInjections;
+                    return prev;
+                });
+            } else {
+                setInjections([]);
             }
 
             // 3. Settings (RESTAURADO)
@@ -304,7 +379,7 @@ export const useSupabaseSync = (
     useEffect(() => {
         if (!currentStoreId) return;
 
-        let channel: RealtimeChannel | null = null;
+        let channel: any = null;
         let deviceId = localStorage.getItem('keclick_device_uuid') || ('dev_' + Math.random().toString(36).substr(2, 9));
         localStorage.setItem('keclick_device_uuid', deviceId);
 
@@ -312,13 +387,16 @@ export const useSupabaseSync = (
             if (channel) supabase.removeChannel(channel);
 
             channel = supabase
-                .channel(`realtime_${deviceId}`)
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'sales' }, async (payload) => {
-                    const payloadData = payload.new as any || payload.old as any;
-                    if (payloadData?.store_id !== currentStoreId) return;
-
+                .channel(`realtime_${currentStoreId}_${deviceId}`)
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'sales',
+                    filter: `store_id=eq.${currentStoreId}`
+                }, async (payload) => {
                     setSyncStatus('online');
                     lastFetchRef.current = Date.now();
+                    const payloadData = payload.new as any || payload.old as any;
 
                     if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
                         let fullSale: SaleRecord;
@@ -346,18 +424,61 @@ export const useSupabaseSync = (
                         forceUIUpdate();
                     }
                 })
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'day_closures' }, (payload) => {
-                    const payloadData = payload.new as any;
-                    if (payloadData?.store_id !== currentStoreId) return;
-
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'expenses',
+                    filter: `store_id=eq.${currentStoreId}`
+                }, (payload) => {
+                    setSyncStatus('online');
+                    if (payload.eventType === 'INSERT') {
+                        const payloadData = payload.new as any;
+                        setExpenses(prev => {
+                            if (prev.some(e => e.id === payloadData.id)) return prev;
+                            return [{ ...payloadData, storeId: payloadData.store_id }, ...prev];
+                        });
+                        forceUIUpdate();
+                    }
+                })
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'cash_injections',
+                    filter: `store_id=eq.${currentStoreId}`
+                }, (payload) => {
+                    setSyncStatus('online');
+                    if (payload.eventType === 'INSERT') {
+                        const payloadData = payload.new as any;
+                        setInjections(prev => {
+                            if (prev.some(i => i.id === payloadData.id)) return prev;
+                            return [{ ...payloadData, storeId: payloadData.store_id }, ...prev];
+                        });
+                        forceUIUpdate();
+                    }
+                })
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'day_closures',
+                    filter: `store_id=eq.${currentStoreId}`
+                }, (payload) => {
                     setSyncStatus('online');
                     lastFetchRef.current = Date.now();
                     if (payload.eventType === 'INSERT') {
-                        const newClosure = payload.new as DayClosure;
+                        const newClosure = payload.new as any;
                         const mappedClosure: DayClosure = {
-                            ...newClosure,
-                            storeId: (newClosure as any).store_id,
-                            reportIds: (newClosure as any).report_ids
+                            id: newClosure.id,
+                            storeId: newClosure.store_id,
+                            date: newClosure.date,
+                            closedAt: newClosure.closed_at,
+                            closedBy: newClosure.closed_by,
+                            isAdminClosure: newClosure.is_admin_closure,
+                            totalPaid: newClosure.total_paid,
+                            totalPending: newClosure.total_pending,
+                            totalVoided: newClosure.total_voided,
+                            salesCount: newClosure.sales_count,
+                            reportIds: newClosure.report_ids,
+                            reconciliation: newClosure.reconciliation_data
                         };
                         setDayClosures(prev => {
                             if (prev.some(c => c.id === mappedClosure.id)) return prev;
@@ -382,7 +503,7 @@ export const useSupabaseSync = (
             clearInterval(reconnectInterval);
             if (channel) supabase.removeChannel(channel);
         };
-    }, [currentStoreId, mapSaleFromSupabase, setReports, setDayClosures, forceUIUpdate]);
+    }, [currentStoreId, mapSaleFromSupabase, setReports, setDayClosures, setExpenses, setInjections, forceUIUpdate]);
 
     useEffect(() => {
         syncStatusRef.current = syncStatus;
@@ -487,7 +608,35 @@ export const useSupabaseSync = (
             total_pending: closure.totalPending,
             total_voided: closure.totalVoided,
             sales_count: closure.salesCount,
-            report_ids: closure.reportIds
+            report_ids: closure.reportIds,
+            reconciliation_data: closure.reconciliation
+        });
+    }, [currentStoreId]);
+
+    const syncExpense = useCallback(async (expense: ExpenseRecord) => {
+        if (!currentStoreId) return;
+        await supabase.from('expenses').upsert({
+            id: expense.id,
+            store_id: currentStoreId,
+            amount: expense.amount,
+            description: expense.description,
+            category: expense.category,
+            date: expense.date,
+            time: expense.time,
+            user: expense.user
+        });
+    }, [currentStoreId]);
+
+    const syncInjection = useCallback(async (injection: CashInjectionRecord) => {
+        if (!currentStoreId) return;
+        await supabase.from('cash_injections').upsert({
+            id: injection.id,
+            store_id: currentStoreId,
+            amount: injection.amount,
+            description: injection.description,
+            date: injection.date,
+            time: injection.time,
+            user: injection.user
         });
     }, [currentStoreId]);
 
@@ -591,10 +740,12 @@ export const useSupabaseSync = (
         safeSyncSale,
         syncSettings,
         syncClosure,
+        syncExpense,
+        syncInjection,
         syncMenu,
         refreshData: fetchData,
         syncStatus,
         lastSyncTime,
         forceRenderCount
-    }), [syncSale, safeSyncSale, syncSettings, syncClosure, syncMenu, fetchData, syncStatus, lastSyncTime, forceRenderCount]);
+    }), [syncSale, safeSyncSale, syncSettings, syncClosure, syncExpense, syncInjection, syncMenu, fetchData, syncStatus, lastSyncTime, forceRenderCount]);
 };

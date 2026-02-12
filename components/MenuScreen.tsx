@@ -25,13 +25,17 @@ interface MenuScreenProps {
     activeRate: number;
     isEditing?: boolean;
     theme?: string;
+    readyPlatesDetails?: { reportId: string, itemName: string, table: string }[];
+    preparingPlatesDetails?: { itemName: string, table: string }[];
+    onMarkAllServed?: () => void;
 }
 
 const MenuScreen: React.FC<MenuScreenProps> = ({
     menu, cart, cartItemCount = 0, onAddItem, onUpdateQuantity, onRemoveItem,
     onOpenModifierModal, onOpenPizzaBuilder, onGoToCart, onClearCart,
     businessName, businessLogo, triggerShake, table, waiter, onDeselectTable, onOpenBarcodeScanner,
-    onInstallApp, showInstallButton, activeRate, isEditing = false, theme = 'keclick'
+    onInstallApp, showInstallButton, activeRate, isEditing = false, theme = 'keclick',
+    readyPlatesDetails = [], preparingPlatesDetails = [], onMarkAllServed
 }) => {
     const [activeCategory, setActiveCategory] = useState<string | null>(menu[0]?.title || null);
     const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -101,13 +105,45 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
                 <div className={`shrink-0 py-3 px-4 flex flex-col z-30 relative border-b ${isMidnight ? 'bg-transparent border-white/10' : (isBrutalist ? 'bg-white/[0.02] backdrop-blur-md border-white/5' : 'bg-[#111] border-white/5')}`}>
                     <div className="max-w-7xl mx-auto w-full">
                         <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="flex items-center text-xl uppercase tracking-tighter italic">
+                            <div className="flex items-center gap-3 overflow-hidden">
+                                <div className="flex items-center text-xl uppercase tracking-tighter italic shrink-0">
                                     <span className="text-[#FF0000] font-black">KE</span>
                                     <span className={`font-black ${isBrutalist ? 'text-[#FFD700]' : 'text-[#FFD700]'}`}>CLICK</span>
                                 </div>
-                                <div className="w-[1px] h-6 bg-white/10 mx-1"></div>
-                                {isEditing && <span className="text-[9px] font-black text-amber-500 uppercase tracking-widest">Edit</span>}
+
+                                <div className="hidden md:block w-[1px] h-6 bg-white/10 mx-1 shrink-0"></div>
+
+                                {/* Kitchen Notifications Integration */}
+                                <div className="flex-1 flex items-center gap-2 overflow-hidden px-2">
+                                    {readyPlatesDetails.length > 0 ? (
+                                        <div onClick={() => onMarkAllServed?.()} className="group flex items-center gap-2 bg-[#0bda19] text-black px-3 py-1.5 rounded-xl cursor-pointer active:scale-95 transition-all overflow-hidden max-w-[200px] md:max-w-md">
+                                            <span className="material-symbols-outlined text-sm font-black animate-pulse">check_circle</span>
+                                            <div className="flex-1 overflow-hidden">
+                                                <div className="whitespace-nowrap animate-marquee-slow text-[10px] font-black uppercase tracking-tighter">
+                                                    {readyPlatesDetails.map((p, i) => (
+                                                        <span key={i} className="mr-4">¡LISTO! {p.table}: {p.itemName}</span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <span className="text-[8px] font-black opacity-40 group-hover:opacity-100 hidden sm:block">VISTO</span>
+                                        </div>
+                                    ) : preparingPlatesDetails.length > 0 ? (
+                                        <div className="flex items-center gap-2 bg-yellow-400 text-black px-3 py-1.5 rounded-xl overflow-hidden max-w-[150px] md:max-w-md">
+                                            <span className="material-symbols-outlined text-xs animate-spin-slow">revolving_dot</span>
+                                            <div className="flex-1 overflow-hidden">
+                                                <div className="whitespace-nowrap animate-marquee-slow text-[9px] font-black uppercase tracking-tighter italic">
+                                                    {preparingPlatesDetails.map((p, i) => (
+                                                        <span key={i} className="mr-4">Cocina: {p.itemName} ({p.table})</span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="text-[8px] font-black text-white/10 uppercase tracking-[0.3em] hidden sm:block">Smart POS</div>
+                                    )}
+                                </div>
+
+                                {isEditing && <span className="text-[9px] font-black text-amber-500 uppercase tracking-widest shrink-0">Edit</span>}
                             </div>
 
                             {(cartItemCount > 0 || isEditing) && onClearCart && (

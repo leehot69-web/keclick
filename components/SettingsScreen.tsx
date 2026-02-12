@@ -59,8 +59,7 @@ const StoreProfileEditor: React.FC<{
           {profile.logo ? <img src={profile.logo} alt="logo" className="w-full h-full object-contain" /> : <div className="text-white font-black">LOGO</div>}
         </div>
         <div>
-          <h3 className="font-bold text-gray-800">Marca Keclick</h3>
-          <p className="text-[10px] text-gray-400 uppercase font-black">Personaliza tu App</p>
+          <h3 className="font-bold text-gray-800 text-xs">Keclik app gestion restaurante v 3.0</h3>
         </div>
       </div>
 
@@ -135,7 +134,7 @@ const StoreProfileEditor: React.FC<{
 const SettingsScreen: React.FC<SettingsScreenProps> = (props) => {
   const {
     settings, onSaveSettings, onGoToTables, waiter, onLogout,
-    storeProfiles, onUpdateStoreProfiles, onClearAllSalesData,
+    storeProfiles, onUpdateStoreProfiles, onClearAllSalesData, onBackupAllSalesData,
     isPrinterConnected, printerName, onConnectPrinter, onDisconnectPrinter, onPrintTest,
     pizzaIngredients, pizzaBasePrices, onUpdatePizzaConfig, onResetApp, syncMenu
   } = props;
@@ -404,10 +403,28 @@ const SettingsScreen: React.FC<SettingsScreenProps> = (props) => {
             </svg>
             Estaciones de Cocina
           </button>
-
+          <div className="pt-6 border-t border-gray-100">
+            <h3 className="font-bold text-gray-800 px-1 uppercase text-xs tracking-widest mb-4">Gestión de Datos (Peligro)</h3>
+            <div className="grid grid-cols-1 gap-3">
+              <button
+                onClick={onBackupAllSalesData}
+                className="w-full py-4 text-gray-600 font-bold bg-gray-50 rounded-2xl border border-gray-200 flex items-center justify-center gap-2 uppercase text-[10px] tracking-widest active:scale-95 transition-all"
+              >
+                <span className="material-symbols-outlined text-lg">download</span>
+                Descargar Respaldo JSON
+              </button>
+              <button
+                onClick={onClearAllSalesData}
+                className="w-full py-4 text-red-600 font-black bg-red-50 rounded-2xl border border-red-100 flex items-center justify-center gap-2 uppercase text-[10px] tracking-widest active:scale-95 transition-all"
+              >
+                <span className="material-symbols-outlined text-lg">delete_forever</span>
+                Resetear Base de Datos
+              </button>
+            </div>
+          </div>
 
           <div className="pt-4 mt-4 border-t border-gray-100 italic text-[10px] text-gray-400 text-center uppercase tracking-widest pb-4">
-            Keclick Software v2.0
+            Keclik app gestion restaurante v 3.0
           </div>
         </div>
 

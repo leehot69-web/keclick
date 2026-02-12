@@ -496,6 +496,34 @@
       }
     }
 
+    @keyframes marquee-slow {
+      0% {
+        transform: translateX(100%);
+      }
+
+      100% {
+        transform: translateX(-100%);
+      }
+    }
+
+    .animate-marquee-slow {
+      animation: marquee-slow 15s linear infinite;
+    }
+
+    @keyframes spin-slow {
+      from {
+        transform: rotate(0deg);
+      }
+
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .animate-spin-slow {
+      animation: spin-slow 3s linear infinite;
+    }
+
     .shake-animation {
       animation: shake 0.5s cubic-bezier(.36, .07, .19, .97) both;
     }
