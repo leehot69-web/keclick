@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { View, MenuItem, StoreProfile, CartItem, CustomerDetails, SelectedModifier, MenuCategory, ModifierGroup, AppSettings, SaleRecord, ThemeName, PizzaConfiguration, PizzaIngredient, PizzaSize, User, DayClosure, UserRole, ExpenseRecord, CashInjectionRecord } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseSync } from './hooks/useSupabaseSync';
@@ -428,20 +429,31 @@ function App() {
     await sendDataToPrinter(printerCharacteristic, textEncoder.encode(cmds));
   };
 
-  const handleReprintSaleRecord = async (sale: SaleRecord) => {
+  const handleReprintSaleRecord = async (sale: SaleRecord | any) => {
+    // Support for raw commands (e.g. Z-Report thermal)
+    if (sale.rawCommands && printerCharacteristic) {
+      await sendDataToPrinter(printerCharacteristic, textEncoder.encode(sale.rawCommands));
+      return;
+    }
+
+    // Support for raw HTML (e.g. Z-Report browser)
+    if (sale.rawHtml) {
+      setReceiptToPrint({ rawHtml: sale.rawHtml, businessName });
+      return;
+    }
+
     const cust: CustomerDetails = { name: sale.customerName || `Ref: ${sale.tableNumber}`, paymentMethod: sale.notes || 'No especificado', phone: '', instructions: '' };
     if (printerCharacteristic) {
       await sendDataToPrinter(printerCharacteristic, textEncoder.encode(generateReceiptCommands(sale.order as CartItem[], cust, { ...settings, businessName }, sale.waiter, "RECIBO (COPIA)")));
     } else {
       setReceiptToPrint({ cart: sale.order as CartItem[], customer: cust, waiter: sale.waiter, title: "COPIA DE RECIBO" });
-      setTimeout(() => { window.print(); setReceiptToPrint(null); }, 500);
     }
   };
 
   const handleEditPendingReport = (report: SaleRecord, target: View = 'cart') => {
-    // SEGURIDAD QUIRÚRGICA: Impedir entrada a edición si ya está pagado
+    // Si la orden NO está pendiente (ya pagada o anulada), mostramos el visor de "Solo Lectura"
     if (report.notes !== 'PENDIENTE') {
-      alert("TRANSACCIÓN BLOQUEADA: Este pedido ya ha sido procesado como PAGADO. No se permiten ediciones para evitar errores de cobro duplicado.");
+      setViewOnlyReport(report);
       return;
     }
 
@@ -458,6 +470,7 @@ function App() {
   };
 
   const handleVoidReport = (id: string) => setPendingVoidReportId(id);
+
   const executeVoidReport = async (reason: string = 'ANULACION MANUAL') => {
     const target = reports.find(r => r.id === pendingVoidReportId);
     if (!target) return;
@@ -899,7 +912,7 @@ function App() {
                         onGoToView={(v) => setCurrentView(v)}
                         onEditOrder={handleEditPendingReport}
                         onVoidOrder={handleVoidReport}
-                        onReprintOrder={handlePrintOrder}
+                        onReprintOrder={handleReprintSaleRecord}
                         isPrinterConnected={isPrinterConnected}
                         forceRenderCount={forceRenderCount}
                         theme={theme}
@@ -1147,24 +1160,87 @@ function App() {
         </div>
       )}
       {receiptToPrint && (
-        <div id="printable-area" className="hidden print:block p-8 bg-white text-black font-mono">
-          <div className="text-center text-xl font-bold mb-4 uppercase border-b-2 border-black pb-2">{businessName}</div>
-          <div className="text-center font-bold mb-6 italic underline">{receiptToPrint.title}</div>
-          <div className="flex justify-between text-xs mb-1"><span>FECHA: {new Date().toLocaleDateString()}</span><span>HORA: {new Date().toLocaleTimeString()}</span></div>
-          <div className="flex justify-between text-xs mb-4"><span>MESERO: {receiptToPrint.waiter}</span><span>REF: {receiptToPrint.customer.name}</span></div>
-          <div className="border-t border-black pt-4 space-y-2">
-            {receiptToPrint.cart.map((item, idx) => (
-              <div key={idx}>
-                <div className="flex justify-between font-bold"><span>{item.quantity}x {item.name}</span><span>${((item.price + item.selectedModifiers.reduce((acc, m) => acc + m.option.price, 0)) * item.quantity).toFixed(2)}</span></div>
-                {item.selectedModifiers.map((m, mi) => <div key={mi} className="text-[10px] italic ml-4">- {m.groupTitle}: {m.option.name}</div>)}
-              </div>
-            ))}
-          </div>
-          <div className="border-t-2 border-black mt-6 pt-4 flex justify-between text-lg font-black uppercase"><span>Total:</span><span>${receiptToPrint.cart.reduce((acc, i) => acc + ((i.price + i.selectedModifiers.reduce((s, m) => s + m.option.price, 0)) * i.quantity), 0).toFixed(2)}</span></div>
-          <div className="text-center mt-8 text-sm font-bold uppercase tracking-widest border-t border-black pt-4">*** GRACIAS ***</div>
-        </div>
+        <ReceiptPrinter
+          receipt={{ ...receiptToPrint, businessName }}
+          onAfterPrint={() => setReceiptToPrint(null)}
+        />
       )}
     </>
+  );
+}
+
+// Componente de impresión auxiliar
+function ReceiptPrinter({ receipt, onAfterPrint }: { receipt: any, onAfterPrint: () => void }) {
+  const onAfterPrintRef = React.useRef(onAfterPrint);
+  const printedRef = React.useRef(false);
+
+  // Mantener la referencia actualizada
+  React.useEffect(() => {
+    onAfterPrintRef.current = onAfterPrint;
+  }, [onAfterPrint]);
+
+  React.useEffect(() => {
+    if (receipt && !printedRef.current) {
+      const timer = setTimeout(() => {
+        // Doble verificación dentro del timeout
+        if (!printedRef.current) {
+          printedRef.current = true;
+          window.print();
+          onAfterPrintRef.current();
+        }
+      }, 500);
+
+      return () => clearTimeout(timer);
+    }
+  }, []); // Ejecutar solo al montar
+
+  if (!receipt) return null;
+
+  return ReactDOM.createPortal(
+    <div className="receipt-portal">
+      <style dangerouslySetInnerHTML={{
+        __html: `
+        @media print {
+          body > *:not(.receipt-portal) {
+            display: none !important;
+          }
+          .receipt-portal {
+            display: block !important;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: auto;
+            background: white;
+            z-index: 9999;
+          }
+          @page { size: auto; margin: 0mm; }
+        }
+      `}} />
+      <div className="p-8 bg-white text-black font-mono text-xs leading-tight">
+        {receipt.rawHtml ? (
+          <div dangerouslySetInnerHTML={{ __html: receipt.rawHtml }} />
+        ) : (
+          <>
+            <div className="text-center text-xl font-bold mb-4 uppercase border-b-2 border-black pb-2">{receipt.businessName || 'Recibo'}</div>
+            <div className="text-center font-bold mb-6 italic underline">{receipt.title}</div>
+            <div className="flex justify-between text-xs mb-1"><span>FECHA: {new Date().toLocaleDateString()}</span><span>HORA: {new Date().toLocaleTimeString()}</span></div>
+            <div className="flex justify-between text-xs mb-4"><span>MESERO: {receipt.waiter}</span><span>REF: {receipt.customer.name}</span></div>
+            <div className="border-t border-black pt-4 space-y-2">
+              {receipt.cart.map((item: any, idx: number) => (
+                <div key={idx}>
+                  <div className="flex justify-between font-bold"><span>{item.quantity}x {item.name}</span><span>${((item.price + item.selectedModifiers.reduce((acc: number, m: any) => acc + m.option.price, 0)) * item.quantity).toFixed(2)}</span></div>
+                  {item.selectedModifiers.map((m: any, mi: number) => <div key={mi} className="text-[10px] italic ml-4">- {m.groupTitle}: {m.option.name}</div>)}
+                </div>
+              ))}
+            </div>
+            <div className="border-t-2 border-black mt-6 pt-4 flex justify-between text-lg font-black uppercase"><span>Total:</span><span>${receipt.cart.reduce((acc: number, i: any) => acc + ((i.price + i.selectedModifiers.reduce((s: number, m: any) => s + m.option.price, 0)) * i.quantity), 0).toFixed(2)}</span></div>
+            <div className="text-center mt-8 text-sm font-bold uppercase tracking-widest border-t border-black pt-4">*** GRACIAS ***</div>
+          </>
+        )}
+      </div>
+    </div>,
+    document.body
   );
 }
 
