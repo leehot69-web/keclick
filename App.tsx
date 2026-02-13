@@ -942,7 +942,16 @@ function App() {
                           }
                         }}
                         activeTableNumbers={[]}
-                        onBackupAllSalesData={() => { }}
+                        onBackupAllSalesData={() => {
+                          const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(reports, null, 2));
+                          const downloadAnchorNode = document.createElement('a');
+                          downloadAnchorNode.setAttribute("href", dataStr);
+                          const date = new Date().toISOString().split('T')[0];
+                          downloadAnchorNode.setAttribute("download", `backup-ventas-${date}.json`);
+                          document.body.appendChild(downloadAnchorNode);
+                          downloadAnchorNode.click();
+                          downloadAnchorNode.remove();
+                        }}
                         onClearAllSalesData={handleDeleteAllData}
                         syncMenu={syncMenu}
                         isPrinterConnected={isPrinterConnected}
