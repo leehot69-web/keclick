@@ -241,11 +241,27 @@ const MenuManagementModal: React.FC<MenuManagementModalProps> = (props) => {
   const handleFinalSave = async () => {
     setIsSavingLocal(true);
     try {
+      // 1. Guardar en estado local (React)
       await onSave(localMenu, localModifierGroups);
       onUpdatePizzaConfig(localPizzaIngredients, localPizzaBasePrices);
-      // El modal se cierra desde el padre si onSave tiene éxito
+
+      // 2. Intentar guardar en Nube (Supabase) automáticamente
+      if (syncMenu) {
+        // Opcional: Preguntar o hacerlo directo. Dado que el botón dice "Guardar y Publicar", asumimos que quiere Publicar.
+        setIsSyncing(true);
+        const result = await syncMenu(localMenu, localModifierGroups);
+        setIsSyncing(false);
+
+        if (!result.success) {
+          alert('⚠️ Se guardó localmente pero hubo error al subir a la nube: ' + (result.error?.message || 'Error desconocido'));
+        } else {
+          // Éxito silencioso o notificación pequeña, el modal se cerrará.
+        }
+      }
+
     } catch (err) {
       console.error(err);
+      alert('Error al guardar: ' + err);
     } finally {
       setIsSavingLocal(false);
     }

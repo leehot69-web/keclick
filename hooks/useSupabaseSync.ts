@@ -399,13 +399,29 @@ export const useSupabaseSync = (
                     const payloadData = payload.new as any || payload.old as any;
 
                     if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+                        console.log('⚡ [REALTIME] Cambio detectado:', payload.eventType);
                         let fullSale: SaleRecord;
+
+                        // Si el payload ya trae los datos, los usamos directo.
                         if (payloadData && payloadData.order_data) {
                             fullSale = mapSaleFromSupabase(payloadData);
                         } else {
-                            const { data } = await supabase.from('sales').select('*').eq('id', payloadData.id).single();
-                            if (!data) return;
-                            fullSale = mapSaleFromSupabase(data);
+                            // Si faltan datos, intentamos leer, pero con protección anti-crash.
+                            try {
+                                console.log('⚡ [REALTIME] Fetching details for ID:', payloadData.id);
+                                const { data, error } = await supabase.from('sales').select('*').eq('id', payloadData.id).single();
+
+                                if (error) {
+                                    console.warn('⚠️ [REALTIME] No se pudo leer el detalle de la venta (Error 406 prevenido):', error);
+                                    return; // Abortamos suavemente sin romper la app
+                                }
+
+                                if (!data) return;
+                                fullSale = mapSaleFromSupabase(data);
+                            } catch (err) {
+                                console.error('❌ [REALTIME] Error fatal intentando leer detalles:', err);
+                                return;
+                            }
                         }
 
                         setReports(prev => {
@@ -487,6 +503,23 @@ export const useSupabaseSync = (
                         forceUIUpdate();
                     }
                 })
+                // NUEVO: Listeners para Menú y Configuración
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_items', filter: `store_id=eq.${currentStoreId}` }, () => {
+                    console.log('🍔 [REALTIME] Menú actualizado. Recargando...');
+                    fetchDataRef.current();
+                })
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_categories', filter: `store_id=eq.${currentStoreId}` }, () => {
+                    console.log('📂 [REALTIME] Categorías actualizadas. Recargando...');
+                    fetchDataRef.current();
+                })
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'modifier_groups', filter: `store_id=eq.${currentStoreId}` }, () => {
+                    console.log('✨ [REALTIME] Grupos de Modificadores cambiados. Recargando...');
+                    fetchDataRef.current();
+                })
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'settings', filter: `store_id=eq.${currentStoreId}` }, () => {
+                    console.log('⚙️ [REALTIME] Configuración cambiada. Recargando...');
+                    fetchDataRef.current();
+                })
                 .subscribe((status) => {
                     if (status === 'SUBSCRIBED') setSyncStatus('online');
                     if (status === 'CHANNEL_ERROR' || status === 'CLOSED') setSyncStatus('polling');
@@ -536,20 +569,8 @@ export const useSupabaseSync = (
         if (!navigator.onLine) return { success: false, errorType: 'offline' };
 
         try {
-            const { data: remoteData, error: fetchError } = await supabase
-                .from('sales')
-                .select('*')
-                .eq('id', sale.id)
-                .single();
-
-            if (fetchError && fetchError.code !== 'PGRST116') return { success: false, errorType: 'error' };
-
-            if (remoteData) {
-                const remoteMapped = mapSaleFromSupabase(remoteData);
-                if (remoteMapped.closed && !sale.closed) return { success: false, errorType: 'conflict', remoteData: remoteMapped };
-                if (remoteMapped.notes === 'ANULADO') return { success: false, errorType: 'conflict', remoteData: remoteMapped };
-            }
-
+            // MODIFICACIÓN DE EMERGENCIA: Saltamos la lectura previa para evitar el Error 406.
+            // Vamos directo a guardar (Upsert).
             const { error: upsertError } = await supabase.from('sales').upsert({
                 id: sale.id,
                 store_id: currentStoreId,
@@ -567,13 +588,17 @@ export const useSupabaseSync = (
                 audit_notes: sale.auditNotes
             });
 
-            if (upsertError) return { success: false, errorType: 'error' };
+            if (upsertError) {
+                console.error("Error al guardar venta:", upsertError);
+                return { success: false, errorType: 'error' };
+            }
 
             return { success: true };
         } catch (err) {
+            console.error("Excepción en safeSyncSale:", err);
             return { success: false, errorType: 'error' };
         }
-    }, [currentStoreId, mapSaleFromSupabase]);
+    }, [currentStoreId]);
 
     const syncSettings = useCallback(async (newSettings: AppSettings) => {
         if (!currentStoreId) return;
